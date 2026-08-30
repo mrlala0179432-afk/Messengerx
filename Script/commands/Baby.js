@@ -2,10 +2,10 @@ const axios = require("axios");
 const fs = require("fs");
 const path = require("path");
 
-const apiList = "https://gitlab.com/LALA/sahu-api/-/raw/main/API.json";
+const apiList = "https://gitlab.com/shahadat-sahu/sahu-api/-/raw/main/API.json";
 const getMainAPI = async () => (await axios.get(apiList)).data.simsimi;
 
-// LALA.json ফাইল থেকে প্রশ্ন-উত্তর খোঁজার ফাউন্সিয়ন
+// LALA.json ফাইল পড়ার ফাউন্সিয়ন
 function getLocalReply(userQuery) {
   try {
     const filePath = path.join(__dirname, "LALA.json");
@@ -36,7 +36,7 @@ function getLocalReply(userQuery) {
 
 module.exports.config = {
   name: "baby",
-  version: "1.0.4",
+  version: "1.0.3",
   hasPermssion: 0,
   credits: "ULLASH",
   description: "Cute AI Baby Chatbot | Talk, Teach & Chat with Emotion ☢️",
@@ -131,7 +131,7 @@ module.exports.run = async function ({ api, event, args, Users }) {
       }, event.messageID);
     }
 
-    // ২. অনলাইন API চেক করবে
+    // ২. API চেক করবে
     const res = await axios.get(`${simsim}/simsimi?text=${encodeURIComponent(query)}&senderName=${encodeURIComponent(senderName)}`);
     const replies = Array.isArray(res.data.response) ? res.data.response : [res.data.response];
 
@@ -162,7 +162,7 @@ module.exports.handleReply = async function ({ api, event, Users, handleReply })
     const replyText = event.body ? event.body.toLowerCase().trim() : "";
     if (!replyText) return;
 
-    // খাবার খাইছো মেসেজের নির্দিষ্ট রিপ্লাই হ্যান্ডলিং
+    // খাবার খাইছো রিলেটেড রিপ্লাই চেক
     if (handleReply.type === "food_check") {
       if (replyText.includes("হ্যাঁ") || replyText.includes("খাইছি") || replyText.includes("হ্যা")) {
         return api.sendMessage("ভালো 😊", event.threadID, event.messageID);
@@ -219,7 +219,6 @@ module.exports.handleEvent = async function ({ api, event, Users }) {
 
     const senderName = await Users.getNameUser(event.senderID);
     const senderID = event.senderID;
-
     const simsim = await getMainAPI();
 
     const greetings = [
@@ -236,7 +235,7 @@ module.exports.handleEvent = async function ({ api, event, Users }) {
       "আজ বট বলে অসম্মান করছি,😰😿",
       "Hop beda😾,Boss বল boss😼",
       "চুপ থাক ,নাই তো তোর দাত ভেগে দিবো কিন্তু",
-      "আমাকে না ডেকে মেয়ে হলে বস সাহুর ইনবক্সে চলে যা 🌚😂 𝐅𝐚𝐜𝐞𝐛𝐨𝐨𝐤 𝐋𝐢𝐧𝐤 : https://www.facebook.com/LxChanchal100",
+      "আমাকে না ডেকে মেয়ে হলে বস সাহুর ইনবক্সে চলে যা 🌚😂 𝐅𝐚𝐜𝐞𝐛𝐨𝐨𝐤 𝐋𝐢𝐧𝐤 : https://www.facebook.com/100044713412032",
       "আমাকে বট না বলে , বস সাহু কে জানু বল জানু 😘",
       "বার বার Disturb করছিস কোনো😾,আমার জানুর সাথে ব্যাস্ত আছি😋",
       "আরে বলদ এতো ডাকিস কেন🤬",
@@ -248,7 +247,7 @@ module.exports.handleEvent = async function ({ api, event, Users }) {
       "আমাকে ডেকো না,আমি বস সাহুর সাথে ব্যাস্ত আছি",
       "কি হলো , মিস্টেক করচ্ছিস নাকি🤣",
       "বলো কি বলবা, সবার সামনে বলবা নাকি?🤭🤏",
-      "জান মেয়ে হলে বস সাহুর ইনবক্সে চলে যাও 😍🫣💕 𝐅𝐚𝐜𝐞𝐛𝐨𝐨𝐤 𝐋𝐢𝐧𝐤 : https://www.facebook.com/LxChanchal100",
+      "জান মেয়ে হলে বস সাহুর ইনবক্সে চলে যাও 😍🫣💕 𝐅𝐚𝐜𝐞𝐛𝐨𝐨𝐤 𝐋𝐢𝐧𝐤 : https://www.facebook.com/100044713412032",
       "কালকে দেখা করিস তো একটু 😈",
       "হা বলো, শুনছি আমি 😏",
       "আর কত বার ডাকবি ,শুনছি তো",
@@ -263,7 +262,7 @@ module.exports.handleEvent = async function ({ api, event, Users }) {
       "jang hanga korba😒😬",
       "হুম জান তোমার অইখানে উম্মমাহ😷😘",
       "আসসালামু আলাইকুম বলেন আপনার জন্য কি করতে পারি..!🥰",
-      "ভালোবাসার নামক আবলামি করতে চাইলে বস সাহুর ইনবক্সে গুতা দিন ~🙊😘🤣 𝐅𝐚𝐜𝐞𝐛𝐨𝐨𝐤 𝐋𝐢𝐧𝐤 : https://www.facebook.com/LxChanchal100",
+      "ভালোবাসার নামক আবলামি করতে চাইলে বস সাহুর ইনবক্সে গুতা দিন ~🙊😘🤣 𝐅𝐚𝐜𝐞𝐛𝐨𝐨𝐤 𝐋𝐢𝐧𝐤 : https://www.facebook.com/100044713412032",
       "আমাকে এতো না ডেকে বস সাহু এর কে একটা গফ দে 🙄",
       "আমাকে এতো না ডেকছ কেন ভলো টালো বাসো নাকি🤭🙈",
       "🌻🌺💚-আসসালামু আলাইকুম ওয়া রাহমাতুল্লাহ-💚🌺🌻",
@@ -280,9 +279,9 @@ module.exports.handleEvent = async function ({ api, event, Users }) {
       "জান মেয়ে হলে চিপায় আসো বস সাহুর থেকে অনেক ভালোবাসা শিখছি তোমার জন্য-🙊🙈😽",
       "ইসস এতো ডাকো কেনো লজ্জা লাগে তো-🙈🖤🌼",
       "আমার বস সাহুর পক্ষ থেকে তোমারে এতো এতো ভালোবাসা-🥰😽🫶 আমার বস সাহু ইসলামে'র জন্য দোয়া করবেন-💝💚🌺🌻",
-      "- ভালোবাসা নামক আবলামি করতে মন চাইলে আমার বস সাহু এর ইনবক্স চলে যাও-🙊🥱👅 🌻𝐅𝐀𝐂𝐄𝐁𝐎𝐎𝐊 𝐈𝐃 𝐋𝐈𝐍𝐊 🌻:- https://www.facebook.com/LxChanchal100",
+      "- ভালোবাসা নামক আবলামি করতে মন চাইলে আমার বস সাহু এর ইনবক্স চলে যাও-🙊🥱👅 🌻𝐅𝐀𝐂𝐄𝐁𝐎𝐎𝐊 𝐈𝐃 𝐋𝐈𝐍𝐊 🌻:- https://www.facebook.com/100044713412032",
       "আমার জান তুমি শুধু আমার আমি তোমারে ৩৬৫ দিন ভালোবাসি-💝🌺😽",
-      "কিরে প্রেম করবি তাহলে বস সাহুর ইনবক্সে গুতা দে 😘🤌 𝐅𝐚𝐜𝐞𝐛𝐨𝐨𝐤 𝐋𝐢𝐧𝐤 : https://www.facebook.com/LxChanchal100",
+      "কিরে প্রেম করবি তাহলে বস সাহুর ইনবক্সে গুতা দে 😘🤌 𝐅𝐚𝐜𝐞𝐛𝐨𝐨𝐤 𝐋𝐢𝐧𝐤 : https://www.facebook.com/100044713412032",
       "জান আমার বস সাহু কে বিয়ে করবা-🙊😘🥳",
       "-আন্টি-🙆-আপনার মেয়ে-👰‍♀️-রাতে আমারে ভিদু কল দিতে বলে🫣-🥵🤤💦",
       "oii-🥺🥹-এক🥄 চামচ ভালোবাসা দিবা-🤏🏻🙂",
@@ -298,7 +297,7 @@ module.exports.handleEvent = async function ({ api, event, Users }) {
       "দিনশেষে পরের 𝐁𝐎𝐖 সুন্দর-☹️🤧",
       "-তাবিজ কইরা হইলেও ফ্রেম এক্কান করমুই তাতে যা হই হোক-🤧🥱🌻",
       "-ছোটবেলা ভাবতাম বিয়ে করলে অটোমেটিক বাচ্চা হয়-🥱-ওমা এখন দেখি কাহিনী অন্যরকম-😦🙂🌻",
-      "প্রেম করতে চাইলে বস সাহুর ইনবক্সে চলে যা 😏🐸 𝐅𝐚𝐜𝐞𝐛𝐨𝐨𝐤 𝐋𝐢𝐧𝐤 : https://www.facebook.com/LxChanchal100",
+      "প্রেম করতে চাইলে বস সাহুর ইনবক্সে চলে যা 😏🐸 𝐅𝐚𝐜𝐞𝐛𝐨𝐨𝐤 𝐋𝐢𝐧𝐤 : https://www.facebook.com/100044713412032",
       "-আজ একটা বিন নেই বলে ফেসবুকের নাগিন-🤧-গুলোরে আমার বস সাহু ধরতে পারছে না-🐸🥲",
       "-চুমু থাকতে তোরা বিড়ি খাস কেন বুঝা আমারে-😑😒🐸⚒️",
       "—যে ছেড়ে গেছে-😔-তাকে ভুলে যাও-🙂-আমার বস সাহু এর সাথে প্রেম করে তাকে দেখিয়ে দাও-🙈🐸🤗",
@@ -308,7 +307,7 @@ module.exports.handleEvent = async function ({ api, event, Users }) {
       "এত অহংকার করে লাভ নেই-🌸মৃত্যুটা নিশ্চিত শুধু সময়টা অ'নিশ্চিত-🖤🙂",
       "-দিন দিন কিছু মানুষের কাছে অপ্রিয় হয়ে যাইতেছি-🙂😿🌸",
       "ভালোবাসার নামক আবলামি করতে চাইলে বস সাহুর ইনবক্সে গুতা দিন🤣😼",
-      "মেয়ে হলে বস সাহুর ইনবক্সে চলে যা 🤭🤣😼 𝐅𝐚𝐜𝐞𝐛𝐨𝐨𝐤 𝐋𝐢𝐧𝐤 : https://www.facebook.com/LxChanchal100",
+      "মেয়ে হলে বস সাহুর ইনবক্সে চলে যা 🤭🤣😼 𝐅𝐚𝐜𝐞𝐛𝐨𝐨𝐤 𝐋𝐢𝐧𝐤 : https://www.facebook.com/100044713412032",
       "হুদাই আমারে শয়তানে লারে-😝😑☹️",
       "-𝗜 𝗟𝗢𝗩𝗘 𝗬𝗢𝗨-😽-আহারে ভাবছো তোমারে প্রোপজ করছি-🥴-থাপ্পর দিয়া কিডনী লক করে দিব-😒-ভুল পড়া বের করে দিবো-🤭🐸",
       "-আমি একটা দুধের শিশু-😇-🫵𝗬𝗢𝗨🐸💦",
@@ -325,6 +324,36 @@ module.exports.handleEvent = async function ({ api, event, Users }) {
       "-আজ থেকে আর কাউকে পাত্তা দিমু না -!😏-কারণ আমি ফর্সা হওয়ার ক্রিম কিনছি -!🙂🐸"
     ];
 
+    // ১. সাধারণ LALA.json চেক (যেমন: ইউজার সরাসরি 'হাই' বা 'কেমন আছো' লিখলে)
+    const directLocalReply = getLocalReply(raw);
+    if (directLocalReply) {
+      return api.sendMessage(directLocalReply, event.threadID, (err, info) => {
+        if (!err) {
+          global.client.handleReply.push({
+            name: module.exports.config.name,
+            messageID: info.messageID,
+            author: senderID,
+            type: "simsimi"
+          });
+        }
+      }, event.messageID);
+    }
+
+    // ২. খাবারের বিশেষ কিওয়ার্ড হ্যান্ডলিং
+    if (raw === "খাবার খাইছো" || raw.includes("খাবার খাইছো")) {
+      return api.sendMessage("হ্যাঁ খাইছি।\nতুমি খাইছো?", event.threadID, (err, info) => {
+        if (!err) {
+          global.client.handleReply.push({
+            name: module.exports.config.name,
+            messageID: info.messageID,
+            author: senderID,
+            type: "food_check"
+          });
+        }
+      }, event.messageID);
+    }
+
+    // ৩. বট/জান বললেই কেবল র‍্যান্ডম শুভেচ্ছা মেসেজ দেবে
     if (
       raw === "baby" || raw === "bot" || raw === "bby" ||
       raw === "jan" || raw === "xan" || raw === "জান" ||
@@ -343,6 +372,7 @@ module.exports.handleEvent = async function ({ api, event, Users }) {
       }, event.messageID);
     }
 
+    // ৪. bot/baby দিয়ে শুরু হলে
     if (
       raw.startsWith("baby ") || raw.startsWith("bot ") || raw.startsWith("bby ") ||
       raw.startsWith("jan ") || raw.startsWith("xan ") ||
@@ -351,24 +381,9 @@ module.exports.handleEvent = async function ({ api, event, Users }) {
       const query = raw.replace(/^baby\s+|^bot\s+|^bby\s+|^jan\s+|^xan\s+|^জান\s+|^বট\s+|^বেবি\s+/i, "").trim();
       if (!query) return;
 
-      // বিশেষ খাবার খাইছো কিওয়ার্ড হ্যান্ডলিং
-      if (query === "খাবার খাইছো" || query.includes("খাবার খাইছো")) {
-        return api.sendMessage("হ্যাঁ খাইছি।\nতুমি খাইছো?", event.threadID, (err, info) => {
-          if (!err) {
-            global.client.handleReply.push({
-              name: module.exports.config.name,
-              messageID: info.messageID,
-              author: senderID,
-              type: "food_check"
-            });
-          }
-        }, event.messageID);
-      }
-
-      // LALA.json চেক
-      const localReply = getLocalReply(query);
-      if (localReply) {
-        return api.sendMessage(localReply, event.threadID, (err, info) => {
+      const subLocalReply = getLocalReply(query);
+      if (subLocalReply) {
+        return api.sendMessage(subLocalReply, event.threadID, (err, info) => {
           if (!err) {
             global.client.handleReply.push({
               name: module.exports.config.name,
@@ -380,7 +395,6 @@ module.exports.handleEvent = async function ({ api, event, Users }) {
         }, event.messageID);
       }
 
-      // API চেক
       const res = await axios.get(`${simsim}/simsimi?text=${encodeURIComponent(query)}&senderName=${encodeURIComponent(senderName)}`);
       const replies = Array.isArray(res.data.response) ? res.data.response : [res.data.response];
 
