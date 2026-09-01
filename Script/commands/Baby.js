@@ -75,7 +75,8 @@ module.exports.run = async function ({ api, event, args, Users }) {
       });
     }
 
-    const command = args[0].toLowerCase();
+    // প্রথম আর্গুমেন্ট থেকে প্রয়োজন সাপেক্ষে স্লাশ সরিয়ে কমান্ডের নাম বের করা
+    const command = args[0].toLowerCase().replace(/^\//, "");
 
     // ----------------------------------------------------
     // ✨ ১. গ্রুপের ID বের করার কমান্ড (/id)
