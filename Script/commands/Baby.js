@@ -2,6 +2,11 @@ const axios = require("axios");
 const fs = require("fs");
 const path = require("path");
 
+// ==========================================
+// 🎯 নিচে আপনার টার্গেট গ্রুপের চ্যাট আইডি বসান
+// ==========================================
+const TARGET_GROUP_ID = "আপনার_গ্রুপ_আইডি_এখানে_বসাবেন";
+
 const apiList = "https://gitlab.com/shahadat-sahu/sahu-api/-/raw/main/API.json";
 const getMainAPI = async () => (await axios.get(apiList)).data.simsimi;
 
@@ -70,6 +75,48 @@ module.exports.run = async function ({ api, event, args, Users }) {
     }
 
     const command = args[0].toLowerCase();
+
+    // ----------------------------------------------------
+    // ✨ ১. গ্রুপের ID বের করার নতুন কমান্ড (/id)
+    // ----------------------------------------------------
+    if (command === "id") {
+      return api.sendMessage(`🆔 This Group/Chat ID: ${event.threadID}`, event.threadID, event.messageID);
+    }
+
+    // ----------------------------------------------------
+    // ✨ ২. বটের ইনবক্স থেকে গ্রুপে পোস্ট করার কমান্ড (/send)
+    // ----------------------------------------------------
+    if (command === "send") {
+      if (args.length < 2 && !TARGET_GROUP_ID) {
+        return api.sendMessage("ব্যবহার করার নিয়ম:\n১. /send [আপনার মেসেজ]\n২. /send [Group_ID] [আপনার মেসেজ]", event.threadID, event.messageID);
+      }
+
+      let targetID = TARGET_GROUP_ID;
+      let msgToSend = "";
+
+      // চেক করবে ইউজার নির্দিষ্ট কোনো গ্রুপ আইডি প্রথম আর্গুমেন্টে দিয়েছে কি না
+      if (args[1] && !isNaN(args[1]) && args[1].length > 8) {
+        targetID = args[1];
+        msgToSend = args.slice(2).join(" ");
+      } else {
+        msgToSend = args.slice(1).join(" ");
+      }
+
+      if (!targetID || targetID === "আপনার_গ্রুপ_আইডি_এখানে_বসাবেন") {
+        return api.sendMessage("⚠️ দয়া করে বটের কোডে TARGET_GROUP_ID বসান অথবা কমান্ডে গ্রুপের আইডি উল্লেখ করুন।", event.threadID, event.messageID);
+      }
+
+      if (!msgToSend.trim()) {
+        return api.sendMessage("⚠️ পাঠানোর জন্য কোনো মেসেজ লেখেননি!", event.threadID, event.messageID);
+      }
+
+      return api.sendMessage(msgToSend, targetID, (err) => {
+        if (err) {
+          return api.sendMessage(`❌ মেসেজ পাঠাতে ব্যর্থ হয়েছে! Error: ${err.message}`, event.threadID, event.messageID);
+        }
+        return api.sendMessage(`✅ মেসেজটি সফলভাবে গ্রুপে পাঠানো হয়েছে!`, event.threadID, event.messageID);
+      });
+    }
 
     if (["remove", "rm"].includes(command)) {
       const parts = rawQuery.replace(/^(remove|rm)\s*/i, "").split(" - ");
@@ -266,7 +313,7 @@ module.exports.handleEvent = async function ({ api, event, Users }) {
       "আমাকে এতো না ডেকে বস সাহু এর কে একটা গফ দে 🙄",
       "আমাকে এতো না ডেকছ কেন ভলো টালো বাসো নাকি🤭🙈",
       "🌻🌺💚-আসসালামু আলাইকুম ওয়া রাহমাতুল্লাহ-💚🌺🌻",
-      "আমি এখন বস সাহু এর সাথে বিজি আছি আমাকে ডাকবেন না-😕😏 ধন্যবাদ-🤝🌻",
+      "আমি এখন বস সাহু এর সাথে বিজি আছিআমাকে ডাকবেন না-😕😏 ধন্যবাদ-🤝🌻",
       "আমাকে না ডেকে আমার বস সাহু কে একটা জি এফ দাও-😽🫶🌺",
       "ঝাং থুমালে আইলাপিউ পেপি-💝😽",
       "উফফ বুঝলাম না এতো ডাকছেন কেনো-😤😡😈",
