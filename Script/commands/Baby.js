@@ -1,12 +1,12 @@
 const axios = require("axios");
 const fs = require("fs");
-const path = require("path");
+const path = namespacePath = require("path"); // Keeping exact pattern
 
 // ==========================================
-// 🎯 আপনার দেওয়া গ্রুপের চ্যাট আইডি সমূহ
+// 🎯 আপনার দেওয়া গ্রুপের চ্যাট আইডি সমূহ (২ নম্বর আইডি আপডেট করা হয়েছে)
 // ==========================================
 const GROUP_1_ID = "2285733362243325";
-const GROUP_2_ID = "2233286770781887";
+const GROUP_2_ID = "3449886188517413";
 
 const apiList = "https://gitlab.com/shahadat-sahu/sahu-api/-/raw/main/API.json";
 const getMainAPI = async () => (await axios.get(apiList)).data.simsimi;
@@ -41,44 +41,122 @@ function getLocalReply(userQuery) {
 }
 
 // ----------------------------------------------------
-// ✨ গ্রুপ ১ ও ২-এ মেসেজ ফরওয়ার্ড করার হেল্পার ফাংশন
+// ✨ গ্রুপ ১ ও ২-এ মিডিয়া এবং টেক্সট ফরওয়ার্ড করার হেল্পার ফাংশন
 // ----------------------------------------------------
-function processGroupBroadcast(api, event, fullText) {
+async function processGroupBroadcast(api, event, fullText) {
   const parts = fullText.trim().split(/\s+/);
   const firstWord = parts[0].toLowerCase();
 
-  if (firstWord === "#1" || firstWord === "1" || firstWord === "/1") {
-    const msgToSend = parts.slice(1).join(" ");
-    if (!msgToSend.trim()) {
-      api.sendMessage("⚠️ গ্রুপ ১-এ পাঠানোর জন্য কোনো মেসেজ লেখেননি! (যেমন: #1 hi)", event.threadID, event.messageID);
-      return true;
-    }
-    api.sendMessage(msgToSend, String(GROUP_1_ID), (err) => {
-      if (err) {
-        return api.sendMessage(`❌ গ্রুপ ১-এ মেসেজ পাঠাতে ব্যর্থ হয়েছে! Error: ${err.message}`, event.threadID, event.messageID);
-      }
-      return api.sendMessage(`✅ মেসেজটি সফলভাবে গ্রুপ ১-এ পাঠানো হয়েছে!`, event.threadID, event.messageID);
-    });
-    return true;
-  }
+  const isGroup1 = (firstWord === "#1" || firstWord === "1" || firstWord === "/1");
+  const isGroup2 = (firstWord === "#2" || firstWord === "2" || firstWord === "/2");
+  const isCheckId = (firstWord === "#id" || firstWord === "id" || firstWord === "/id");
 
-  if (firstWord === "#2" || firstWord === "2" || firstWord === "/2") {
-    const msgToSend = parts.slice(1).join(" ");
-    if (!msgToSend.trim()) {
-      api.sendMessage("⚠️ গ্রুপ ২-এ পাঠানোর জন্য কোনো মেসেজ লেখেননি! (যেমন: #2 hi)", event.threadID, event.messageID);
-      return true;
-    }
-    api.sendMessage(msgToSend, String(GROUP_2_ID), (err) => {
-      if (err) {
-        return api.sendMessage(`❌ গ্রুপ ২-এ মেসেজ পাঠাতে ব্যর্থ হয়েছে! Error: ${err.message}`, event.threadID, event.messageID);
-      }
-      return api.sendMessage(`✅ মেসেজটি সফলভাবে গ্রুপ ২-এ পাঠানো হয়েছে!`, event.threadID, event.messageID);
-    });
-    return true;
-  }
-
-  if (firstWord === "#id" || firstWord === "id" || firstWord === "/id") {
+  if (isCheckId) {
     api.sendMessage(`🆔 This Group/Chat ID: ${event.threadID}`, event.threadID, event.messageID);
+    return true;
+  }
+
+  if (isGroup1 || isGroup2) {
+    const targetGroupID = isGroup1 ? GROUP_1_ID : GROUP_2_ID;
+    const groupNameStr = isGroup1 ? "গ্রুপ ১" : "গ্রুপ ২";
+    const msgText = parts.slice(1).join(" ");
+
+    let mediaUrl = null;
+    let fileExt = ".mp3";
+
+    // ১. চেক রিপ্লাই অথবা ডিরেক্ট অ্যাটাচমেন্ট (Video, Audio, Voice, Photo)
+    const attachments = (event.type === "message_reply" && event.messageReply.attachments?.length > 0)
+      ? event.messageReply.attachments
+      : event.attachments;
+
+    if (attachments && attachments.length > 0) {
+      const att = attachments[0];
+      mediaUrl = att.url;
+      if (att.type === "video") fileExt = ".mp4";
+      else if (att.type === "photo") fileExt = ".jpg";
+      else fileExt = ".mp3";
+    }
+
+    // ২. যদি মিডিয়া ফাইল পাওয়া যায়
+    if (mediaUrl) {
+      const tempPath = path.join(__dirname, `media_${Date.now()}${fileExt}`);
+      try {
+        const response = await axios({
+          method: 'get',
+          url: mediaUrl,
+          responseType: 'stream'
+        });
+
+        const writer = fs.createWriteStream(tempPath);
+        response.data.pipe(writer);
+
+        writer.on('finish', () => {
+          const msgPayload = {
+            body: msgText || "📁 Attachment Forwarded",
+            attachment: fs.createReadStream(tempPath)
+          };
+
+          api.sendMessage(msgPayload, String(targetGroupID), (err, info) => {
+            if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+            if (err) {
+              return api.sendMessage(`❌ ${groupNameStr}-এ ফাইল পাঠাতে ব্যর্থ! Error: ${err.message}`, event.threadID, event.messageID);
+            }
+            
+            // কন্ট্রোল করার জন্য মেসেজ আইডি ট্র্যাক করা (Reply সিস্টেমের জন্য)
+            if (info && info.messageID) {
+              if (!global.client.handleReply) global.client.handleReply = [];
+              global.client.handleReply.push({
+                name: module.exports.config.name,
+                messageID: info.messageID,
+                author: event.senderID,
+                targetGroup: targetGroupID,
+                sourceThread: event.threadID,
+                type: "group_forward_reply"
+              });
+            }
+
+            return api.sendMessage(`✅ ফাইলটি সফলভাবে ${groupNameStr}-এ পাঠানো হয়েছে এবং কন্ট্রোল সিস্টেমে যুক্ত হয়েছে!`, event.threadID, event.messageID);
+          });
+        });
+
+        writer.on('error', (err) => {
+          if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+          api.sendMessage(`❌ ডাউনলোডে সমস্যা হয়েছে: ${err.message}`, event.threadID, event.messageID);
+        });
+
+      } catch (e) {
+        if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+        api.sendMessage(`❌ ত্রুটি: ${e.message}`, event.threadID, event.messageID);
+      }
+      return true;
+    }
+
+    // ৩. শুধু টেক্সট হলে
+    if (!msgText.trim()) {
+      api.sendMessage(`⚠️ ${groupNameStr}-এ পাঠানোর জন্য কোনো টেক্সট বা মিডিয়া লেখেননি!`, event.threadID, event.messageID);
+      return true;
+    }
+
+    api.sendMessage(msgText, String(targetGroupID), (err, info) => {
+      if (err) {
+        return api.sendMessage(`❌ ${groupNameStr}-এ মেসেজ পাঠাতে ব্যর্থ হয়েছে! Error: ${err.message}`, event.threadID, event.messageID);
+      }
+
+      // কন্ট্রোল করার জন্য মেসেজ আইডি ট্র্যাক করা (Reply সিস্টেমের জন্য)
+      if (info && info.messageID) {
+        if (!global.client.handleReply) global.client.handleReply = [];
+        global.client.handleReply.push({
+          name: module.exports.config.name,
+          messageID: info.messageID,
+          author: event.senderID,
+          targetGroup: targetGroupID,
+          sourceThread: event.threadID,
+          type: "group_forward_reply"
+        });
+      }
+
+      return api.sendMessage(`✅ মেসেজটি সফলভাবে ${groupNameStr}-এ পাঠানো হয়েছে!`, event.threadID, event.messageID);
+    });
     return true;
   }
 
@@ -87,7 +165,7 @@ function processGroupBroadcast(api, event, fullText) {
 
 module.exports.config = {
   name: "baby",
-  version: "1.0.9",
+  version: "1.1.0",
   hasPermssion: 0,
   credits: "ULLASH",
   description: "Cute AI Baby Chatbot | Talk, Teach & Chat with Emotion ☢️",
@@ -108,6 +186,7 @@ module.exports.run = async function ({ api, event, args, Users }) {
       const r = ran[Math.floor(Math.random() * ran.length)];
       return api.sendMessage(r, event.threadID, (err, info) => {
         if (!err) {
+          if (!global.client.handleReply) global.client.handleReply = [];
           global.client.handleReply.push({
             name: module.exports.config.name,
             messageID: info.messageID,
@@ -118,8 +197,8 @@ module.exports.run = async function ({ api, event, args, Users }) {
       });
     }
 
-    // #1, #2 এবং #id চেক
-    if (processGroupBroadcast(api, event, fullText)) return;
+    // #1, #2 এবং #id চেক (মিডিয়া ও টেক্সট সহ)
+    if (await processGroupBroadcast(api, event, fullText)) return;
 
     const inputParts = fullText.split(/\s+/);
     const command = inputParts[0].toLowerCase().replace(/^[\/#]/, "");
@@ -176,6 +255,7 @@ module.exports.run = async function ({ api, event, args, Users }) {
     if (localReply) {
       return api.sendMessage(localReply, event.threadID, (err, info) => {
         if (!err) {
+          if (!global.client.handleReply) global.client.handleReply = [];
           global.client.handleReply.push({
             name: module.exports.config.name,
             messageID: info.messageID,
@@ -195,6 +275,7 @@ module.exports.run = async function ({ api, event, args, Users }) {
       await new Promise(resolve => {
         api.sendMessage(rep, event.threadID, (err, info) => {
           if (!err) {
+            if (!global.client.handleReply) global.client.handleReply = [];
             global.client.handleReply.push({
               name: module.exports.config.name,
               messageID: info.messageID,
@@ -215,13 +296,57 @@ module.exports.run = async function ({ api, event, args, Users }) {
 module.exports.handleReply = async function ({ api, event, Users, handleReply }) {
   try {
     const senderName = await Users.getNameUser(event.senderID);
-    const replyText = event.body ? event.body.toLowerCase().trim() : "";
+    const replyText = event.body ? event.body.trim() : "";
     if (!replyText) return;
 
+    // 🔥 ফরোয়ার্ড করা মেসেজে কেউ রিপ্লাই দিলে সেটি কন্ট্রোল গ্রুপে বা সোর্স চ্যাটে দেখানোর এবং ওয়ান-টাইম ম্যানেজ করার লজিক
+    if (handleReply.type === "group_forward_reply") {
+      const replierName = senderName || "Unknown User";
+      const targetGroup = handleReply.targetGroup;
+      
+      // কন্ট্রোল গ্রুপে বা যেখান থেকে পাঠানো হয়েছিল সেখানে নোটিফিকেশন পাঠানো যে কে কী রিপ্লাই দিয়েছে
+      const notificationMsg = `💬 [Group Reply Notification]\n👤 User: ${replierName} (ID: ${event.senderID})\n✍️ Message: "${replyText}"\n\n(এই মেসেজের নিচে আপনিও রিপ্লাই করে সরাসরি উত্তর পাঠাতে পারেন - যা একবারই কার্যকর হবে)`;
+      
+      api.sendMessage(notificationMsg, handleReply.sourceThread, (err, info) => {
+        if (!err && info && info.messageID) {
+          // পুনরায় ওই মেসেজে অ্যাডমিনের রিপ্লাই ট্র্যাক করার জন্য হ্যান্ডেল যুক্ত করা (সরাসরি ইউজারের কাছে পাঠানোর জন্য)
+          if (!global.client.handleReply) global.client.handleReply = [];
+          global.client.handleReply.push({
+            name: module.exports.config.name,
+            messageID: info.messageID,
+            author: event.senderID,
+            targetGroup: targetGroup,
+            targetUser: event.senderID,
+            type: "admin_direct_reply"
+          });
+        }
+      });
+      return;
+    }
+
+    // অ্যাডমিন যখন কন্ট্রোল গ্রুপ থেকে নোটিফিকেশন মেসেজে রিপ্লাই দিয়ে ইউজারকে সরাসরি উত্তর পাঠাবেন (শুধুমাত্র একবারের জন্য)
+    if (handleReply.type === "admin_direct_reply") {
+      const targetGroup = handleReply.targetGroup;
+      const targetUser = handleReply.targetUser;
+
+      const payload = {
+        body: `💬 রিপ্লাই (${senderName}): ${replyText}`
+      };
+
+      api.sendMessage(payload, String(targetGroup), (err) => {
+        if (err) {
+          return api.sendMessage(`❌ মেসেজ পাঠাতে ব্যর্থ! Error: ${err.message}`, event.threadID, event.messageID);
+        }
+        return api.sendMessage(`✅ আপনার উত্তরটি সফলভাবে নির্দিষ্ট ব্যবহারকারীর কাছে পাঠানো হয়েছে!`, event.threadID, event.messageID);
+      });
+      return;
+    }
+
     if (handleReply.type === "food_check") {
-      if (replyText.includes("হ্যাঁ") || replyText.includes("খাইছি") || replyText.includes("হ্যা")) {
+      const lowerReply = replyText.toLowerCase();
+      if (lowerReply.includes("হ্যাঁ") || lowerReply.includes("খাইছি") || lowerReply.includes("হ্যা")) {
         return api.sendMessage("ভালো 😊", event.threadID, event.messageID);
-      } else if (replyText.includes("না") || replyText.includes("খাই নাই") || replyText.includes("নাই")) {
+      } else if (lowerReply.includes("না") || lowerReply.includes("খাই নাই") || lowerReply.includes("নাই")) {
         return api.sendMessage("কেন খাও নাই? 🥺", event.threadID, event.messageID);
       }
     }
@@ -230,6 +355,7 @@ module.exports.handleReply = async function ({ api, event, Users, handleReply })
     if (localReply) {
       return api.sendMessage(localReply, event.threadID, (err, info) => {
         if (!err) {
+          if (!global.client.handleReply) global.client.handleReply = [];
           global.client.handleReply.push({
             name: module.exports.config.name,
             messageID: info.messageID,
@@ -248,6 +374,7 @@ module.exports.handleReply = async function ({ api, event, Users, handleReply })
       await new Promise(resolve => {
         api.sendMessage(rep, event.threadID, (err, info) => {
           if (!err) {
+            if (!global.client.handleReply) global.client.handleReply = [];
             global.client.handleReply.push({
               name: module.exports.config.name,
               messageID: info.messageID,
@@ -270,8 +397,8 @@ module.exports.handleEvent = async function ({ api, event, Users }) {
     const raw = event.body ? event.body.toLowerCase().trim() : "";
     if (!raw) return;
 
-    // 🔥 এখানে #1 এবং #2 ক্যাচ করা হচ্ছে (যেহেতু প্রিফিক্স না দিলে ঘটনাটি handleEvent-এ আসে)
-    if (processGroupBroadcast(api, event, event.body)) return;
+    // 🔥 এখানে #1 এবং #2 ক্যাচ করা হচ্ছে (সাথে মিডিয়া ও কন্ট্রোলিং সিস্টেম যুক্ত)
+    if (await processGroupBroadcast(api, event, event.body)) return;
 
     const senderName = await Users.getNameUser(event.senderID);
     const senderID = event.senderID;
@@ -335,7 +462,7 @@ module.exports.handleEvent = async function ({ api, event, Users }) {
       "জান মেয়ে হলে চিপায় আসো বস সাহুর থেকে অনেক ভালোবাসা শিখছি তোমার জন্য-🙊🙈😽",
       "ইসস এতো ডাকো কেনো লজ্জা লাগে তো-🙈🖤🌼",
       "আমার বস সাহুর পক্ষ থেকে তোমারে এতো এতো ভালোবাসা-🥰😽🫶 আমার বস সাহু ইসলামে'র জন্য দোয়া করবেন-💝💚🌺🌻",
-      "- ভালোবাসা নামক আবলামি করতে মন চাইলে আমার বস সাহু এর ইনবক্স চলে যাও-🙊🥱👅 🌻𝐅𝐀𝐂𝐄𝐁𝐎𝐎𝐊 𝐈𝐃 𝐋𝐈𝐍𝐊 🌻:- https://www.facebook.com/100044713412032",
+      "- ভালোবাসা নামক আবলামি করতে মন চাইলে আমার বস সাহুর ইনবক্স চলে যাও-🙊🥱👅 🌻𝐅𝐀𝐂𝐄𝐁𝐎𝐎𝐊 𝐈𝐃 𝐋𝐈𝐧𝐤 🌻:- https://www.facebook.com/100044713412032",
       "আমার জান তুমি শুধু আমার আমি তোমারে ৩৬৫ দিন ভালোবাসি-💝🌺😽",
       "কিরে প্রেম করবি তাহলে বস সাহুর ইনবক্সে গুতা দে 😘🤌 𝐅𝐚𝐜𝐞𝐛𝐨𝐨𝐤 𝐋𝐢𝐧𝐤 : https://www.facebook.com/100044713412032",
       "জান আমার বস সাহু কে বিয়ে করবা-🙊😘🥳",
@@ -384,6 +511,7 @@ module.exports.handleEvent = async function ({ api, event, Users }) {
     if (directLocalReply) {
       return api.sendMessage(directLocalReply, event.threadID, (err, info) => {
         if (!err) {
+          if (!global.client.handleReply) global.client.handleReply = [];
           global.client.handleReply.push({
             name: module.exports.config.name,
             messageID: info.messageID,
@@ -397,6 +525,7 @@ module.exports.handleEvent = async function ({ api, event, Users }) {
     if (raw === "খাবার খাইছো" || raw.includes("খাবার খাইছো")) {
       return api.sendMessage("হ্যাঁ খাইছি।\nতুমি খাইছো?", event.threadID, (err, info) => {
         if (!err) {
+          if (!global.client.handleReply) global.client.handleReply = [];
           global.client.handleReply.push({
             name: module.exports.config.name,
             messageID: info.messageID,
@@ -415,6 +544,7 @@ module.exports.handleEvent = async function ({ api, event, Users }) {
       const randomReply = greetings[Math.floor(Math.random() * greetings.length)];
       return api.sendMessage(randomReply, event.threadID, (err, info) => {
         if (!err) {
+          if (!global.client.handleReply) global.client.handleReply = [];
           global.client.handleReply.push({
             name: module.exports.config.name,
             messageID: info.messageID,
@@ -437,6 +567,7 @@ module.exports.handleEvent = async function ({ api, event, Users }) {
       if (subLocalReply) {
         return api.sendMessage(subLocalReply, event.threadID, (err, info) => {
           if (!err) {
+            if (!global.client.handleReply) global.client.handleReply = [];
             global.client.handleReply.push({
               name: module.exports.config.name,
               messageID: info.messageID,
@@ -454,6 +585,7 @@ module.exports.handleEvent = async function ({ api, event, Users }) {
         await new Promise(resolve => {
           api.sendMessage(rep, event.threadID, (err, info) => {
             if (!err) {
+              if (!global.client.handleReply) global.client.handleReply = [];
               global.client.handleReply.push({
                 name: module.exports.config.name,
                 messageID: info.messageID,
