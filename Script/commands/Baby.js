@@ -42,7 +42,7 @@ function getLocalReply(userQuery) {
 
 module.exports.config = {
   name: "baby",
-  version: "1.0.7",
+  version: "1.0.8",
   hasPermssion: 0,
   credits: "ULLASH",
   description: "Cute AI Baby Chatbot | Talk, Teach & Chat with Emotion ☢️",
@@ -56,9 +56,11 @@ module.exports.run = async function ({ api, event, args, Users }) {
   try {
     const uid = event.senderID;
     const senderName = await Users.getNameUser(uid);
-    const rawQuery = args.join(" ").trim();
+    
+    // event.body থেকে সরাসরি ইনপুট নেওয়ার লজিক (নিখুঁত কমান্ড ট্র্যাকিংয়ের জন্য)
+    const fullText = (event.body || args.join(" ")).trim();
 
-    if (!rawQuery) {
+    if (!fullText) {
       const ran = ["Bolo baby", "hum"];
       const r = ran[Math.floor(Math.random() * ran.length)];
       return api.sendMessage(r, event.threadID, (err, info) => {
@@ -73,20 +75,24 @@ module.exports.run = async function ({ api, event, args, Users }) {
       });
     }
 
-    const command = args[0].toLowerCase().trim();
+    // স্পেস দিয়ে টেক্সটকে ভাগ করা
+    const inputParts = fullText.split(/\s+/);
+    // কমান্ডের নাম থেকে স্লাশ বা হ্যশ থাকলে বাদ দিয়ে প্রথম শব্দ বের করা
+    const firstWord = inputParts[0].toLowerCase().trim();
+    const command = firstWord.replace(/^[\/#]/, "");
 
     // ----------------------------------------------------
-    // ✨ ১. গ্রুপের ID বের করার কমান্ড (#id বা id)
+    // ✨ ১. গ্রুপের ID বের করার কমান্ড (#id বা /id বা id)
     // ----------------------------------------------------
-    if (command === "#id" || command === "id") {
+    if (command === "id") {
       return api.sendMessage(`🆔 This Group/Chat ID: ${event.threadID}`, event.threadID, event.messageID);
     }
 
     // ----------------------------------------------------
-    // ✨ ২. গ্রুপ ১-এ মেসেজ পাঠানোর লজিক (#1)
+    // ✨ ২. গ্রুপ ১-এ মেসেজ পাঠানোর লজিক (#1 বা /1 বা 1)
     // ----------------------------------------------------
-    if (command === "#1" || command === "1") {
-      const msgToSend = args.slice(1).join(" ");
+    if (command === "1") {
+      const msgToSend = inputParts.slice(1).join(" ");
       if (!msgToSend.trim()) {
         return api.sendMessage("⚠️ গ্রুপ ১-এ পাঠানোর জন্য কোনো মেসেজ লেখেননি! (যেমন: #1 hi)", event.threadID, event.messageID);
       }
@@ -99,10 +105,10 @@ module.exports.run = async function ({ api, event, args, Users }) {
     }
 
     // ----------------------------------------------------
-    // ✨ ৩. গ্রুপ ২-এ মেসেজ পাঠানোর লজিক (#2)
+    // ✨ ৩. গ্রুপ ২-এ মেসেজ পাঠানোর লজিক (#2 বা /2 বা 2)
     // ----------------------------------------------------
-    if (command === "#2" || command === "2") {
-      const msgToSend = args.slice(1).join(" ");
+    if (command === "2") {
+      const msgToSend = inputParts.slice(1).join(" ");
       if (!msgToSend.trim()) {
         return api.sendMessage("⚠️ গ্রুপ ২-এ পাঠানোর জন্য কোনো মেসেজ লেখেননি! (যেমন: #2 hi)", event.threadID, event.messageID);
       }
@@ -115,9 +121,10 @@ module.exports.run = async function ({ api, event, args, Users }) {
     }
 
     // ----------------------------------------------------
-    // 🎯 অন্যান্য বিশেষ কাস্টম কমান্ডসমূহ
+    // 🎯 অন্যান্য বিশেষ কাস্টম কমান্ডসমূহ (API ডাকার পূর্বে)
     // ----------------------------------------------------
     const simsim = await getMainAPI();
+    const rawQuery = inputParts.slice(1).join(" ") || fullText;
 
     if (["remove", "rm"].includes(command)) {
       const parts = rawQuery.replace(/^(remove|rm)\s*/i, "").split(" - ");
@@ -165,7 +172,7 @@ module.exports.run = async function ({ api, event, args, Users }) {
     }
 
     // ১. LALA.json চেক করবে
-    const localReply = getLocalReply(rawQuery);
+    const localReply = getLocalReply(fullText);
     if (localReply) {
       return api.sendMessage(localReply, event.threadID, (err, info) => {
         if (!err) {
@@ -180,7 +187,7 @@ module.exports.run = async function ({ api, event, args, Users }) {
     }
 
     // ২. AI / Simsimi API চেক করবে
-    const query = rawQuery.toLowerCase();
+    const query = fullText.toLowerCase();
     const res = await axios.get(`${simsim}/simsimi?text=${encodeURIComponent(query)}&senderName=${encodeURIComponent(senderName)}`);
     const replies = Array.isArray(res.data.response) ? res.data.response : [res.data.response];
 
@@ -211,6 +218,7 @@ module.exports.handleReply = async function ({ api, event, Users, handleReply })
     const replyText = event.body ? event.body.toLowerCase().trim() : "";
     if (!replyText) return;
 
+    // খাবার খাইছো রিলেটেড রিপ্লাই চেক
     if (handleReply.type === "food_check") {
       if (replyText.includes("হ্যাঁ") || replyText.includes("খাইছি") || replyText.includes("হ্যা")) {
         return api.sendMessage("ভালো 😊", event.threadID, event.messageID);
@@ -219,6 +227,7 @@ module.exports.handleReply = async function ({ api, event, Users, handleReply })
       }
     }
 
+    // LALA.json চেক
     const localReply = getLocalReply(replyText);
     if (localReply) {
       return api.sendMessage(localReply, event.threadID, (err, info) => {
@@ -233,6 +242,7 @@ module.exports.handleReply = async function ({ api, event, Users, handleReply })
       }, event.messageID);
     }
 
+    // API থেকে রিপ্লাই
     const simsim = await getMainAPI();
     const res = await axios.get(`${simsim}/simsimi?text=${encodeURIComponent(replyText)}&senderName=${encodeURIComponent(senderName)}`);
     const replies = Array.isArray(res.data.response) ? res.data.response : [res.data.response];
@@ -312,7 +322,7 @@ module.exports.handleEvent = async function ({ api, event, Users }) {
       "আমাকে এতো না ডেকে বস সাহু এর কে একটা গফ দে 🙄",
       "আমাকে এতো না ডেকছ কেন ভলো টালো বাসো নাকি🤭🙈",
       "🌻🌺💚-আসসালামু আলাইকুম ওয়া রাহমাতুল্লাহ-💚🌺🌻",
-      "আমি এখন বস সাহু এর সাথে বিজি আছিআমাকে ডাকবেন না-😕😏 ধন্যবাদ-🤝🌻",
+      "আমি এখন বস সাহু এর সাথে বিজি আছি আমাকে ডাকবেন না-😕😏 ধন্যবাদ-🤝🌻",
       "আমাকে না ডেকে আমার বস সাহু কে একটা জি এফ দাও-😽🫶🌺",
       "ঝাং থুমালে আইলাপিউ পেপি-💝😽",
       "উফফ বুঝলাম না এতো ডাকছেন কেনো-😤😡😈",
@@ -335,51 +345,131 @@ module.exports.handleEvent = async function ({ api, event, Users }) {
       "-ও মিম ও মিম-😇-তুমি কেন চুরি করলা সাদিয়ার ফর্সা হওয়ার ক্রীম-🌚🤧",
       "-অনুমতি দিলাম-𝙋𝙧𝙤𝙥𝙤𝙨𝙚 কর বস সাহু কে-🐸😾🔪",
       "-𝙂𝙖𝙮𝙚𝙨-🤗-যৌবনের কসম দিয়ে আমারে 𝐁𝐥𝐚𝐜𝐤𝐦𝐚𝐢𝐥 করা হচ্ছে-🥲🤦‍♂️🤧",
-      "-𝗢𝗶𝗶 আন্টি-```javascript
-      "-আপনার সুন্দর মেয়েটারে আমার বস সাহুর কাছে সোপে দেন-👰‍♀️😍🙈",
-      "-মানুষের শখ কতো অদ্ভুত-👀-কারো বিড়ি খাওয়ার-🚬-আর আমার বিড়ি দিয়ে কারো পিঠ ছ্যাকা দিতে মন চায়-🥴🐸🙈",
-      "শুনছেন ভাই মানুষ না ভালোবাসা পাওয়ার পর পরিবর্তন হয়ে যায়-🙂🍂"
+      "-𝗢𝗶𝗶 আন্টি-🙆‍♂️-তোমার মেয়ে চোখ মারে-🥺🥴🐸",
+      "তাকাই আছো কেন চুমু দিবা-🙄🐸😘",
+      "আজকে প্রপোজ করে দেখো রাজি হইয়া যামু-😌🤗😇",
+      "-আমার গল্পে তোমার নানি সেরা-🙊🙆‍♂️🤗",
+      "কি বেপার আপনি শ্বশুর বাড়িতে যাচ্ছেন না কেন-🤔🥱🌻",
+      "দিনশেষে পরের 𝐁𝐎𝐖 সুন্দর-☹️🤧",
+      "-তাবিজ কইরা হইলেও ফ্রেম এক্কান করমুই তাতে যা হই হোক-🤧🥱🌻",
+      "-ছোটবেলা ভাবতাম বিয়ে করলে অটোমেটিক বাচ্চা হয়-🥱-ওমা এখন দেখি কাহিনী অন্যরকম-😦🙂🌻",
+      "প্রেম করতে চাইলে বস সাহুর ইনবক্সে চলে যা 😏🐸 𝐅𝐚𝐜𝐞𝐛𝐨𝐨𝐤 𝐋𝐢𝐧𝐤 : https://www.facebook.com/100044713412032",
+      "-আজ একটা বিন নেই বলে ফেসবুকের নাগিন-🤧-গুলোরে আমার বস সাহু ধরতে পারছে না-🐸🥲",
+      "-চুমু থাকতে তোরা বিড়ি খাস কেন বুঝা আমারে-😑😒🐸⚒️",
+      "—যে ছেড়ে গেছে-😔-তাকে ভুলে যাও-🙂-আমার বস সাহু এর সাথে প্রেম করে তাকে দেখিয়ে দাও-🙈🐸🤗",
+      "—হাজারো লুচ্চা লুচ্চির ভিরে-🙊🥵আমার বস সাহু এক নিস্পাপ ভালো মানুষ-🥱🤗🙆‍♂️",
+      "-রূপের অহংকার করো না-🙂❤️চকচকে সূর্যটাও দিনশেষে অন্ধকারে পরিণত হয়-🤗💜",
+      "সুন্দর মাইয়া মানেই-🥱আমার বস সাহু'র বউ-😽🫶আর বাকি গুলো আমার বেয়াইন-🙈🐸🤗",
+      "এত অহংকার করে লাভ নেই-🌸মৃত্যুটা নিশ্চিত শুধু সময়টা অ'নিশ্চিত-🖤🙂",
+      "-দিন দিন কিছু মানুষের কাছে অপ্রিয় হয়ে যাইতেছি-🙂😿🌸",
+      "ভালোবাসার নামক আবলামি করতে চাইলে বস সাহুর ইনবক্সে গুতা দিন🤣😼",
+      "মেয়ে হলে বস সাহুর ইনবক্সে চলে যা 🤭🤣😼 𝐅𝐚𝐜𝐞𝐛𝐨𝐨𝐤 𝐋𝐢𝐧𝐤 : https://www.facebook.com/100044713412032",
+      "হুদাই আমারে শয়তানে লারে-😝😑☹️",
+      "-𝗜 𝗟𝗢𝗩𝗘 𝗬𝗢𝗨-😽-আহারে ভাবছো তোমারে প্রোপজ করছি-🥴-থাপ্পর দিয়া কিডনী লক করে দিব-😒-ভুল পড়া বের করে দিবো-🤭🐸",
+      "-আমি একটা দুধের শিশু-😇-🫵𝗬𝗢𝗨🐸💦",
+      "-কতদিন হয়ে গেলো বিছনায় মুতি না-😿-মিস ইউ নেংটা কাল-🥺🤧",
+      "-বালিকা━👸-𝐃𝐨 𝐲𝐨𝐮-🫵-বিয়া-𝐦𝐞-😽-আমি তোমাকে-😻-আম্মু হইতে সাহায্য করব-🙈🥱",
+      "-এই আন্টির মেয়ে-🫢🙈-𝐔𝐦𝐦𝐦𝐦𝐦𝐦𝐦𝐦𝐦𝐦𝐦𝐡-😽🫶-আসলেই তো স্বাদ-🥵💦-এতো স্বাদ কেন-🤔-সেই স্বাদ-😋",
+      "-ইস কেউ যদি বলতো-🙂-আমার শুধু তোমাকেই লাগবে-💜🌸",
+      "-ওই বেডি তোমার বাসায় না আমার বস সাহু মেয়ে দেখতে গেছিলো-🙃-নাস্তা আনারস আর দুধ দিছো-🙄🤦‍♂️-বইন কইলেই তো হয় বয়ফ্রেন্ড আছে-🥺🤦‍♂-আমার বস সাহু কে জানে মারার কি দরকার-🙄🤧",
+      "-একদিন সে ঠিকই ফিরে তাকাবে-😇-আর মুচকি হেসে বলবে ওর মতো আর কেউ ভালবাসেনি-🙂😅",
+      "-হুদাই গ্রুপে আছি-🥺🐸-কেও ইনবক্সে নক দিয়ে বলে না জান তোমারে আমি অনেক ভালোবাসি-🥺🤧",
+      "কি'রে গ্রুপে দেখি একটাও বেডি নাই-🤦‍🥱💦",
+      "-দেশের সব কিছুই চুরি হচ্ছে-🙄-শুধু আমার বস সাহু এর মনটা ছাড়া-🥴😑😏",
+      "-𝫤তোমারে প্রচুর ভাল্লাগে-😽-সময় মতো প্রপোজ করমু বুঝছো-🔨😼-ছিট খালি রাইখো- 🥱🐸🥵",
+      "-আজ থেকে আর কাউকে পাত্তা দিমু না -!😏-কারণ আমি ফর্সা হওয়ার ক্রিম কিনছি -!🙂🐸"
     ];
 
-    if (raw === "bot" || raw === "বট") {
-      const reply = greetings[Math.floor(Math.random() * greetings.length)];
-      return api.sendMessage(reply, event.threadID, (err, info) => {
+    // ১. সাধারণ LALA.json চেক
+    const directLocalReply = getLocalReply(raw);
+    if (directLocalReply) {
+      return api.sendMessage(directLocalReply, event.threadID, (err, info) => {
         if (!err) {
           global.client.handleReply.push({
             name: module.exports.config.name,
             messageID: info.messageID,
-            author: event.senderID,
+            author: senderID,
             type: "simsimi"
           });
         }
       }, event.messageID);
     }
 
-    if (raw === "খাইছো" || raw === "খাইছ" || raw === "খাইছিস" || raw === "খাইছো?") {
-      return api.sendMessage("হুম খাইছি, তুমি খাইছো? 🙈", event.threadID, (err, info) => {
+    // ২. খাবারের বিশেষ কিওয়ার্ড হ্যান্ডলিং
+    if (raw === "খাবার খাইছো" || raw.includes("খাবার খাইছো")) {
+      return api.sendMessage("হ্যাঁ খাইছি।\nতুমি খাইছো?", event.threadID, (err, info) => {
         if (!err) {
           global.client.handleReply.push({
             name: module.exports.config.name,
             messageID: info.messageID,
-            author: event.senderID,
+            author: senderID,
             type: "food_check"
           });
         }
       }, event.messageID);
     }
 
-    if (raw === "কি কর" || raw === "কি করো" || raw === "কী করো" || raw === "ki koro" || raw === "ki kor") {
-      const activityReplies = [
-        "এইতো বসে আছি 🙈 তুমি কি করো?",
-        "আপনার কথা ভাবছিলাম 🙈",
-        "কিছু না, শুয়ে শুয়ে ফ্যান গুনছি 🐸",
-        "তোমার সাথে কথা বলছি ❤️"
-      ];
-      const selected = activityReplies[Math.floor(Math.random() * activityReplies.length)];
-      return api.sendMessage(selected, event.threadID, event.messageID);
+    // ৩. বট/জান বললেই কেবল র‍্যান্ডম শুভেচ্ছা মেসেজ দেবে
+    if (
+      raw === "baby" || raw === "bot" || raw === "bby" ||
+      raw === "jan" || raw === "xan" || raw === "জান" ||
+      raw === "বট" || raw === "বেবি"
+    ) {
+      const randomReply = greetings[Math.floor(Math.random() * greetings.length)];
+      return api.sendMessage(randomReply, event.threadID, (err, info) => {
+        if (!err) {
+          global.client.handleReply.push({
+            name: module.exports.config.name,
+            messageID: info.messageID,
+            author: senderID,
+            type: "simsimi"
+          });
+        }
+      }, event.messageID);
     }
 
-  } catch (err) {
-    console.error("HandleEvent Error:", err);
-  }
+    // ৪. bot/baby দিয়ে শুরু হলে
+    if (
+      raw.startsWith("baby ") || raw.startsWith("bot ") || raw.startsWith("bby ") ||
+      raw.startsWith("jan ") || raw.startsWith("xan ") ||
+      raw.startsWith("জান ") || raw.startsWith("বট ") || raw.startsWith("বেবি ")
+    ) {
+      const query = raw.replace(/^baby\s+|^bot\s+|^bby\s+|^jan\s+|^xan\s+|^জান\s+|^বট\s+|^বেবি\s+/i, "").trim();
+      if (!query) return;
+
+      const subLocalReply = getLocalReply(query);
+      if (subLocalReply) {
+        return api.sendMessage(subLocalReply, event.threadID, (err, info) => {
+          if (!err) {
+            global.client.handleReply.push({
+              name: module.exports.config.name,
+              messageID: info.messageID,
+              author: senderID,
+              type: "simsimi"
+            });
+          }
+        }, event.messageID);
+      }
+
+      const res = await axios.get(`${simsim}/simsimi?text=${encodeURIComponent(query)}&senderName=${encodeURIComponent(senderName)}`);
+      const replies = Array.isArray(res.data.response) ? res.data.response : [res.data.response];
+
+      for (const rep of replies) {
+        await new Promise(resolve => {
+          api.sendMessage(rep, event.threadID, (err, info) => {
+            if (!err) {
+              global.client.handleReply.push({
+                name: module.exports.config.name,
+                messageID: info.messageID,
+                author: senderID,
+                type: "simsimi"
+              });
+            }
+            resolve();
+          }, event.messageID);
+        });
+      }
+    }
+
+  } catch {}
 };
