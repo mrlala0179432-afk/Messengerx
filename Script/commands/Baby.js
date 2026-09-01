@@ -11,7 +11,7 @@ const GROUP_2_ID = "2233286770781887";
 const apiList = "https://gitlab.com/shahadat-sahu/sahu-api/-/raw/main/API.json";
 const getMainAPI = async () => (await axios.get(apiList)).data.simsimi;
 
-// LALA.json ফাইল পড়ার ফাউন্সিয়ন
+// LALA.json ফাইল পড়ার ফাংশন
 function getLocalReply(userQuery) {
   try {
     const filePath = path.join(__dirname, "LALA.json");
@@ -42,7 +42,7 @@ function getLocalReply(userQuery) {
 
 module.exports.config = {
   name: "baby",
-  version: "1.0.3",
+  version: "1.0.4",
   hasPermssion: 0,
   credits: "ULLASH",
   description: "Cute AI Baby Chatbot | Talk, Teach & Chat with Emotion ☢️",
@@ -56,11 +56,9 @@ module.exports.run = async function ({ api, event, args, Users }) {
   try {
     const uid = event.senderID;
     const senderName = await Users.getNameUser(uid);
-    const rawQuery = args.join(" ");
-    const query = rawQuery.toLowerCase();
-    const simsim = await getMainAPI();
-
-    if (!query) {
+    const rawQuery = args.join(" ").trim();
+    
+    if (!rawQuery) {
       const ran = ["Bolo baby", "hum"];
       const r = ran[Math.floor(Math.random() * ran.length)];
       return api.sendMessage(r, event.threadID, (err, info) => {
@@ -75,7 +73,7 @@ module.exports.run = async function ({ api, event, args, Users }) {
       });
     }
 
-    // প্রথম আর্গুমেন্ট থেকে প্রয়োজন সাপেক্ষে স্লাশ সরিয়ে কমান্ডের নাম বের করা
+    // প্রথম শব্দ থেকে স্লাশ থাকলে তা বাদ দিয়ে মূল কমান্ড বের করা
     const command = args[0].toLowerCase().replace(/^\//, "");
 
     // ----------------------------------------------------
@@ -116,6 +114,11 @@ module.exports.run = async function ({ api, event, args, Users }) {
         return api.sendMessage(`✅ মেসেজটি সফলভাবে গ্রুপ ২-এ পাঠানো হয়েছে!`, event.threadID, event.messageID);
       });
     }
+
+    // ----------------------------------------------------
+    // 🎯 অন্যান্য বিশেষ কাস্টম কমান্ডসমূহ (API ডাকার পূর্বে)
+    // ----------------------------------------------------
+    const simsim = await getMainAPI();
 
     if (["remove", "rm"].includes(command)) {
       const parts = rawQuery.replace(/^(remove|rm)\s*/i, "").split(" - ");
@@ -177,7 +180,8 @@ module.exports.run = async function ({ api, event, args, Users }) {
       }, event.messageID);
     }
 
-    // ২. API চেক করবে
+    // ২. AI / Simsimi API চেক করবে
+    const query = rawQuery.toLowerCase();
     const res = await axios.get(`${simsim}/simsimi?text=${encodeURIComponent(query)}&senderName=${encodeURIComponent(senderName)}`);
     const replies = Array.isArray(res.data.response) ? res.data.response : [res.data.response];
 
@@ -355,7 +359,7 @@ module.exports.handleEvent = async function ({ api, event, Users }) {
       "ভালোবাসার নামক আবলামি করতে চাইলে বস সাহুর ইনবক্সে গুতা দিন🤣😼",
       "মেয়ে হলে বস সাহুর ইনবক্সে চলে যা 🤭🤣😼 𝐅𝐚𝐜𝐞𝐛𝐨𝐨𝐤 𝐋𝐢𝐧𝐤 : https://www.facebook.com/100044713412032",
       "হুদাই আমারে শয়তানে লারে-😝😑☹️",
-      "-𝗜 𝗟𝗢𝗩𝗘 𝗬𝗢𝗨-😽-আহারে ভাবছো তোমারে প্রোপজ করছি-🥴-থাপ্পর দিয়া কিডনী লক করে দিব-😒-ভুল পড়া বের করে দিবো-🤭🐸",
+      "-𝗜 𝗟𝗢𝗩𝗘 𝗬𝗢𝗨-😽-আহারে ভাবছো তোমারে প্রোপজ করছি-🥴-থাপ্পর দিয়া কিডনী লক করে দিব-😒-ভুল পড়া বের করে দিবো-🤭🐸",
       "-আমি একটা দুধের শিশু-😇-🫵𝗬𝗢𝗨🐸💦",
       "-কতদিন হয়ে গেলো বিছনায় মুতি না-😿-মিস ইউ নেংটা কাল-🥺🤧",
       "-বালিকা━👸-𝐃𝐨 𝐲𝐨𝐮-🫵-বিয়া-𝐦𝐞-😽-আমি তোমাকে-😻-আম্মু হইতে সাহায্য করব-🙈🥱",
@@ -370,7 +374,7 @@ module.exports.handleEvent = async function ({ api, event, Users }) {
       "-আজ থেকে আর কাউকে পাত্তা দিমু না -!😏-কারণ আমি ফর্সা হওয়ার ক্রিম কিনছি -!🙂🐸"
     ];
 
-    // ১. সাধারণ LALA.json চেক (যেমন: ইউজার সরাসরি 'হাই' বা 'কেমন আছো' লিখলে)
+    // ১. সাধারণ LALA.json চেক
     const directLocalReply = getLocalReply(raw);
     if (directLocalReply) {
       return api.sendMessage(directLocalReply, event.threadID, (err, info) => {
