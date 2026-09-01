@@ -40,9 +40,54 @@ function getLocalReply(userQuery) {
   return null;
 }
 
+// ----------------------------------------------------
+// ✨ গ্রুপ ১ ও ২-এ মেসেজ ফরওয়ার্ড করার হেল্পার ফাংশন
+// ----------------------------------------------------
+function processGroupBroadcast(api, event, fullText) {
+  const parts = fullText.trim().split(/\s+/);
+  const firstWord = parts[0].toLowerCase();
+
+  if (firstWord === "#1" || firstWord === "1" || firstWord === "/1") {
+    const msgToSend = parts.slice(1).join(" ");
+    if (!msgToSend.trim()) {
+      api.sendMessage("⚠️ গ্রুপ ১-এ পাঠানোর জন্য কোনো মেসেজ লেখেননি! (যেমন: #1 hi)", event.threadID, event.messageID);
+      return true;
+    }
+    api.sendMessage(msgToSend, String(GROUP_1_ID), (err) => {
+      if (err) {
+        return api.sendMessage(`❌ গ্রুপ ১-এ মেসেজ পাঠাতে ব্যর্থ হয়েছে! Error: ${err.message}`, event.threadID, event.messageID);
+      }
+      return api.sendMessage(`✅ মেসেজটি সফলভাবে গ্রুপ ১-এ পাঠানো হয়েছে!`, event.threadID, event.messageID);
+    });
+    return true;
+  }
+
+  if (firstWord === "#2" || firstWord === "2" || firstWord === "/2") {
+    const msgToSend = parts.slice(1).join(" ");
+    if (!msgToSend.trim()) {
+      api.sendMessage("⚠️ গ্রুপ ২-এ পাঠানোর জন্য কোনো মেসেজ লেখেননি! (যেমন: #2 hi)", event.threadID, event.messageID);
+      return true;
+    }
+    api.sendMessage(msgToSend, String(GROUP_2_ID), (err) => {
+      if (err) {
+        return api.sendMessage(`❌ গ্রুপ ২-এ মেসেজ পাঠাতে ব্যর্থ হয়েছে! Error: ${err.message}`, event.threadID, event.messageID);
+      }
+      return api.sendMessage(`✅ মেসেজটি সফলভাবে গ্রুপ ২-এ পাঠানো হয়েছে!`, event.threadID, event.messageID);
+    });
+    return true;
+  }
+
+  if (firstWord === "#id" || firstWord === "id" || firstWord === "/id") {
+    api.sendMessage(`🆔 This Group/Chat ID: ${event.threadID}`, event.threadID, event.messageID);
+    return true;
+  }
+
+  return false;
+}
+
 module.exports.config = {
   name: "baby",
-  version: "1.0.8",
+  version: "1.0.9",
   hasPermssion: 0,
   credits: "ULLASH",
   description: "Cute AI Baby Chatbot | Talk, Teach & Chat with Emotion ☢️",
@@ -56,8 +101,6 @@ module.exports.run = async function ({ api, event, args, Users }) {
   try {
     const uid = event.senderID;
     const senderName = await Users.getNameUser(uid);
-    
-    // event.body থেকে সরাসরি ইনপুট নেওয়ার লজিক (নিখুঁত কমান্ড ট্র্যাকিংয়ের জন্য)
     const fullText = (event.body || args.join(" ")).trim();
 
     if (!fullText) {
@@ -75,56 +118,13 @@ module.exports.run = async function ({ api, event, args, Users }) {
       });
     }
 
-    // স্পেস দিয়ে টেক্সটকে ভাগ করা
+    // #1, #2 এবং #id চেক
+    if (processGroupBroadcast(api, event, fullText)) return;
+
     const inputParts = fullText.split(/\s+/);
-    // কমান্ডের নাম থেকে স্লাশ বা হ্যশ থাকলে বাদ দিয়ে প্রথম শব্দ বের করা
-    const firstWord = inputParts[0].toLowerCase().trim();
-    const command = firstWord.replace(/^[\/#]/, "");
-
-    // ----------------------------------------------------
-    // ✨ ১. গ্রুপের ID বের করার কমান্ড (#id বা /id বা id)
-    // ----------------------------------------------------
-    if (command === "id") {
-      return api.sendMessage(`🆔 This Group/Chat ID: ${event.threadID}`, event.threadID, event.messageID);
-    }
-
-    // ----------------------------------------------------
-    // ✨ ২. গ্রুপ ১-এ মেসেজ পাঠানোর লজিক (#1 বা /1 বা 1)
-    // ----------------------------------------------------
-    if (command === "1") {
-      const msgToSend = inputParts.slice(1).join(" ");
-      if (!msgToSend.trim()) {
-        return api.sendMessage("⚠️ গ্রুপ ১-এ পাঠানোর জন্য কোনো মেসেজ লেখেননি! (যেমন: #1 hi)", event.threadID, event.messageID);
-      }
-      return api.sendMessage(msgToSend, String(GROUP_1_ID), (err) => {
-        if (err) {
-          return api.sendMessage(`❌ গ্রুপ ১-এ মেসেজ পাঠাতে ব্যর্থ হয়েছে! Error: ${err.message}`, event.threadID, event.messageID);
-        }
-        return api.sendMessage(`✅ মেসেজটি সফলভাবে গ্রুপ ১-এ পাঠানো হয়েছে!`, event.threadID, event.messageID);
-      });
-    }
-
-    // ----------------------------------------------------
-    // ✨ ৩. গ্রুপ ২-এ মেসেজ পাঠানোর লজিক (#2 বা /2 বা 2)
-    // ----------------------------------------------------
-    if (command === "2") {
-      const msgToSend = inputParts.slice(1).join(" ");
-      if (!msgToSend.trim()) {
-        return api.sendMessage("⚠️ গ্রুপ ২-এ পাঠানোর জন্য কোনো মেসেজ লেখেননি! (যেমন: #2 hi)", event.threadID, event.messageID);
-      }
-      return api.sendMessage(msgToSend, String(GROUP_2_ID), (err) => {
-        if (err) {
-          return api.sendMessage(`❌ গ্রুপ ২-এ মেসেজ পাঠাতে ব্যর্থ হয়েছে! Error: ${err.message}`, event.threadID, event.messageID);
-        }
-        return api.sendMessage(`✅ মেসেজটি সফলভাবে গ্রুপ ২-এ পাঠানো হয়েছে!`, event.threadID, event.messageID);
-      });
-    }
-
-    // ----------------------------------------------------
-    // 🎯 অন্যান্য বিশেষ কাস্টম কমান্ডসমূহ (API ডাকার পূর্বে)
-    // ----------------------------------------------------
-    const simsim = await getMainAPI();
+    const command = inputParts[0].toLowerCase().replace(/^[\/#]/, "");
     const rawQuery = inputParts.slice(1).join(" ") || fullText;
+    const simsim = await getMainAPI();
 
     if (["remove", "rm"].includes(command)) {
       const parts = rawQuery.replace(/^(remove|rm)\s*/i, "").split(" - ");
@@ -171,7 +171,7 @@ module.exports.run = async function ({ api, event, args, Users }) {
       return api.sendMessage(res.data.message, event.threadID, event.messageID);
     }
 
-    // ১. LALA.json চেক করবে
+    // ১. LALA.json চেক
     const localReply = getLocalReply(fullText);
     if (localReply) {
       return api.sendMessage(localReply, event.threadID, (err, info) => {
@@ -186,7 +186,7 @@ module.exports.run = async function ({ api, event, args, Users }) {
       }, event.messageID);
     }
 
-    // ২. AI / Simsimi API চেক করবে
+    // ২. AI API চেক
     const query = fullText.toLowerCase();
     const res = await axios.get(`${simsim}/simsimi?text=${encodeURIComponent(query)}&senderName=${encodeURIComponent(senderName)}`);
     const replies = Array.isArray(res.data.response) ? res.data.response : [res.data.response];
@@ -218,7 +218,6 @@ module.exports.handleReply = async function ({ api, event, Users, handleReply })
     const replyText = event.body ? event.body.toLowerCase().trim() : "";
     if (!replyText) return;
 
-    // খাবার খাইছো রিলেটেড রিপ্লাই চেক
     if (handleReply.type === "food_check") {
       if (replyText.includes("হ্যাঁ") || replyText.includes("খাইছি") || replyText.includes("হ্যা")) {
         return api.sendMessage("ভালো 😊", event.threadID, event.messageID);
@@ -227,7 +226,6 @@ module.exports.handleReply = async function ({ api, event, Users, handleReply })
       }
     }
 
-    // LALA.json চেক
     const localReply = getLocalReply(replyText);
     if (localReply) {
       return api.sendMessage(localReply, event.threadID, (err, info) => {
@@ -242,7 +240,6 @@ module.exports.handleReply = async function ({ api, event, Users, handleReply })
       }, event.messageID);
     }
 
-    // API থেকে রিপ্লাই
     const simsim = await getMainAPI();
     const res = await axios.get(`${simsim}/simsimi?text=${encodeURIComponent(replyText)}&senderName=${encodeURIComponent(senderName)}`);
     const replies = Array.isArray(res.data.response) ? res.data.response : [res.data.response];
@@ -272,6 +269,9 @@ module.exports.handleEvent = async function ({ api, event, Users }) {
   try {
     const raw = event.body ? event.body.toLowerCase().trim() : "";
     if (!raw) return;
+
+    // 🔥 এখানে #1 এবং #2 ক্যাচ করা হচ্ছে (যেহেতু প্রিফিক্স না দিলে ঘটনাটি handleEvent-এ আসে)
+    if (processGroupBroadcast(api, event, event.body)) return;
 
     const senderName = await Users.getNameUser(event.senderID);
     const senderID = event.senderID;
@@ -380,7 +380,6 @@ module.exports.handleEvent = async function ({ api, event, Users }) {
       "-আজ থেকে আর কাউকে পাত্তা দিমু না -!😏-কারণ আমি ফর্সা হওয়ার ক্রিম কিনছি -!🙂🐸"
     ];
 
-    // ১. সাধারণ LALA.json চেক
     const directLocalReply = getLocalReply(raw);
     if (directLocalReply) {
       return api.sendMessage(directLocalReply, event.threadID, (err, info) => {
@@ -395,7 +394,6 @@ module.exports.handleEvent = async function ({ api, event, Users }) {
       }, event.messageID);
     }
 
-    // ২. খাবারের বিশেষ কিওয়ার্ড হ্যান্ডলিং
     if (raw === "খাবার খাইছো" || raw.includes("খাবার খাইছো")) {
       return api.sendMessage("হ্যাঁ খাইছি।\nতুমি খাইছো?", event.threadID, (err, info) => {
         if (!err) {
@@ -409,7 +407,6 @@ module.exports.handleEvent = async function ({ api, event, Users }) {
       }, event.messageID);
     }
 
-    // ৩. বট/জান বললেই কেবল র‍্যান্ডম শুভেচ্ছা মেসেজ দেবে
     if (
       raw === "baby" || raw === "bot" || raw === "bby" ||
       raw === "jan" || raw === "xan" || raw === "জান" ||
@@ -428,7 +425,6 @@ module.exports.handleEvent = async function ({ api, event, Users }) {
       }, event.messageID);
     }
 
-    // ৪. bot/baby দিয়ে শুরু হলে
     if (
       raw.startsWith("baby ") || raw.startsWith("bot ") || raw.startsWith("bby ") ||
       raw.startsWith("jan ") || raw.startsWith("xan ") ||
@@ -471,5 +467,7 @@ module.exports.handleEvent = async function ({ api, event, Users }) {
       }
     }
 
-  } catch {}
+  } catch (err) {
+    console.error("HandleEvent Error:", err);
+  }
 };
