@@ -3,7 +3,7 @@ const fs = require("fs");
 const path = require("path");
 
 // ==========================================
-// 🎯 আপনার দেওয়া গ্রুপের চ্যাট আইডি সমূহ
+// 🎯 আপনার গ্রুপের চ্যাট আইডি সমূহ
 // ==========================================
 const GROUP_1_ID = "2285733362243325";
 const GROUP_2_ID = "3449886188517413";
@@ -161,7 +161,7 @@ async function processGroupBroadcast(api, event, fullText) {
 
 module.exports.config = {
   name: "baby",
-  version: "1.2.4",
+  version: "1.2.5",
   hasPermssion: 0,
   credits: "ULLASH",
   description: "Cute AI Baby Chatbot | Talk, Teach & Chat with Emotion ☢️",
@@ -365,12 +365,18 @@ module.exports.handleReply = async function ({ api, event, Users, handleReply })
 
 module.exports.handleEvent = async function ({ api, event, Users }) {
   try {
-    const raw = event.body ? event.body.trim() : "";
-    
-    // 🔥 ১. গ্রুপ ১ থেকে মেসেজ আসলে সবার আগে সরাসরি ২ নম্বর গ্রুপে অটো-ফরোয়ার্ড হবে
-    if (String(event.threadID) === String(GROUP_1_ID) && String(event.senderID) !== String(api.getCurrentUserID())) {
+    // 🔥 ১. সরাসরি গ্রুপ আইডি চেক করে ফরোয়ার্ড করার নিখুঁত লজিক
+    const currentThreadID = String(event.threadID);
+    const targetGroup1 = String(GROUP_1_ID);
+    const targetGroup2 = String(GROUP_2_ID);
+    const botID = String(api.getCurrentUserID());
+
+    if (currentThreadID === targetGroup1 && String(event.senderID) !== botID) {
+      const raw = event.body ? event.body.trim() : "";
       const senderName = await Users.getNameUser(event.senderID);
       
+      console.log(`[FORWARD TRIGGER] Group 1-এ মেসেজ পাওয়া গেছে। এখন গ্রুপ ২ (${targetGroup2})-এ পাঠানো হচ্ছে...`);
+
       let forwardContent = `📩 [Message from Group 1]\n👤 User: ${senderName} (${event.senderID})\n💬 Message: ${raw || "Media/Attachment"}`;
 
       let mediaUrl = null;
@@ -391,42 +397,61 @@ module.exports.handleEvent = async function ({ api, event, Users }) {
           response.data.pipe(writer);
 
           writer.on('finish', () => {
-            api.sendMessage({ body: forwardContent, attachment: fs.createReadStream(tempPath) }, String(GROUP_2_ID), (err, info) => {
+            api.sendMessage({ body: forwardContent, attachment: fs.createReadStream(tempPath) }, targetGroup2, (err, info) => {
               if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
-              if (!err && info && info.messageID) {
-                if (!global.client.handleReply) global.client.handleReply = [];
-                global.client.handleReply.push({
-                  name: module.exports.config.name,
-                  messageID: info.messageID,
-                  author: event.senderID,
-                  targetGroup: GROUP_1_ID,
-                  sourceThread: GROUP_2_ID,
-                  type: "group_forward_reply"
-                });
+              if (err) {
+                console.error("[FORWARD ERROR] মিডিয়া পাঠাতে সমস্যা:", err);
+              } else {
+                console.log("[FORWARD SUCCESS] গ্রুপ ২ এ মিডিয়া পাঠানো সফল হয়েছে!");
+                if (info && info.messageID) {
+                  if (!global.client.handleReply) global.client.handleReply = [];
+                  global.client.handleReply.push({
+                    name: module.exports.config.name,
+                    messageID: info.messageID,
+                    author: event.senderID,
+                    targetGroup: GROUP_1_ID,
+                    sourceThread: GROUP_2_ID,
+                    type: "group_forward_reply"
+                  });
+                }
               }
             });
           });
-          writer.on('error', () => { if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath); });
-        } catch (e) { if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath); }
-      } else if (raw) {
-        api.sendMessage(forwardContent, String(GROUP_2_ID), (err, info) => {
-          if (!err && info && info.messageID) {
-            if (!global.client.handleReply) global.client.handleReply = [];
-            global.client.handleReply.push({
-              name: module.exports.config.name,
-              messageID: info.messageID,
-              author: event.senderID,
-              targetGroup: GROUP_1_ID,
-              sourceThread: GROUP_2_ID,
-              type: "group_forward_reply"
-            });
+          writer.on('error', (e) => { 
+            if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+            console.error("[FORWARD STREAM ERROR]:", e);
+          });
+        } catch (e) { 
+          if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+          console.error("[FORWARD CATCH ERROR]:", e);
+        }
+      } else {
+        api.sendMessage(forwardContent, targetGroup2, (err, info) => {
+          if (err) {
+            console.error("[FORWARD ERROR] টেক্সট পাঠাতে সমস্যা:", err);
+          } else {
+            console.log("[FORWARD SUCCESS] গ্রুপ ২ এ টেক্সট পাঠানো সফল হয়েছে!");
+            if (info && info.messageID) {
+              if (!global.client.handleReply) global.client.handleReply = [];
+              global.client.handleReply.push({
+                name: module.exports.config.name,
+                messageID: info.messageID,
+                author: event.senderID,
+                targetGroup: GROUP_1_ID,
+                sourceThread: GROUP_2_ID,
+                type: "group_forward_reply"
+              });
+            }
           }
         });
       }
       return; 
     }
 
+    // ২ নম্বর গ্রুপ বা অন্য কোনো জায়গা থেকে ম্যানুয়াল কমান্ড চেক
     if (await processGroupBroadcast(api, event, event.body)) return;
+    
+    const raw = event.body ? event.body.trim() : "";
     if (!raw) return;
 
     const senderName = await Users.getNameUser(event.senderID);
@@ -491,7 +516,7 @@ module.exports.handleEvent = async function ({ api, event, Users }) {
       "জান মেয়ে হলে চিপায় আসো বস সাহুর থেকে অনেক ভালোবাসা শিখছি তোমার জন্য-🙊🙈😽",
       "ইসস এতো ডাকো কেনো লজ্জা লাগে তো-🙈🖤🌼",
       "আমার বস সাহুর পক্ষ থেকে তোমারে এতো এতো ভালোবাসা-🥰😽🫶 আমার বস সাহু ইসলামে'র জন্য দোয়া করবেন-💝💚🌺🌻",
-      "- ভালোবাসা নামক আবলামি করতে মন চাইলে আমার বস সাহুর ইনবক্স চলে যাও-🙊🥱👅 🌻𝐅𝐀𝐂𝐄𝐁𝐎𝐎𝐊 𝐈𝐃 𝐋𝐈𝐧𝐤 🌻:- https://www.facebook.com/100044713412032",
+      "- ভালোবাসা নামক আবলামি করতে মন চাইলে আমার বস সাহুর ইনবক্স চলে যাও-🙊🥱👅 🌻𝐅𝐀𝐂𝐄𝐁𝐎𝐎𝐊 𝐈𝐃 𝐋𝐢𝐧𝐤 🌻:- https://www.facebook.com/100044713412032",
       "আমার জান তুমি শুধু আমার আমি তোমারে ৩৬৫ দিন ভালোবাসি-💝🌺😽",
       "কিরে প্রেম করবি তাহলে বস সাহুর ইনবক্সে গুতা দে 😘🤌 𝐅𝐚𝐜𝐞𝐛𝐨𝐨𝐤 𝐋𝐈𝐍𝐤 : https://www.facebook.com/100044713412032",
       "জান আমার বস সাহু কে বিয়ে করবা-🙊😘🥳",
@@ -509,7 +534,7 @@ module.exports.handleEvent = async function ({ api, event, Users }) {
       "দিনশেষে পরের 𝐁𝐎𝐖 সুন্দর-☹️🤧",
       "-তাবিজ কইরা হইলেও ফ্রেম এক্কান করমুই তাতে যা হই হোক-🤧🥱🌻",
       "-ছোটবেলা ভাবতাম বিয়ে করলে অটোমেটিক বাচ্চা হয়-🥱-ওমা এখন দেখি কাহিনী অন্যরকম-😦🙂🌻",
-      "প্রেম করতে চাইলে বস সাহুর ইনবক্সে চলে যা 😏🐸 𝐅𝐚𝐜𝐞𝐛𝐨𝐨𝐤 𝐋𝐈𝐧𝐤 : https://www.facebook.com/100044713412032",
+      "প্রেম করতে চাইলে বস সাহুর ইনবক্সে চলে যা 😏🐸 𝐅𝐚𝐜𝐞𝐛𝐨𝐨𝐤 𝐋𝐈𝐍𝐤 : https://www.facebook.com/100044713412032",
       "-আজ একটা বিন নেই বলে ফেসবুকের নাগিন-🤧-গুলোরে আমার বস সাহু ধরতে পারছে না-🐸🥲",
       "-চুমু থাকতে তোরা বিড়ি খাস কেন বুঝা আমারে-😑😒🐸⚒️",
       "—যে ছেড়ে গেছে-😔-তাকে ভুলে যাও-🙂-আমার বস সাহু এর সাথে প্রেম করে তাকে দেখিয়ে দাও-🙈🐸🤗",
@@ -519,7 +544,7 @@ module.exports.handleEvent = async function ({ api, event, Users }) {
       "এত অহংকার করে লাভ নেই-🌸মৃত্যুটা নিশ্চিত শুধু সময়টা অ'নিশ্চিত-🖤🙂",
       "-দিন দিন কিছু মানুষের কাছে অপ্রিয় হয়ে যাইতেছি-🙂😿🌸",
       "ভালোবাসার নামক আবলামি করতে চাইলে বস সাহুর ইনবক্সে গুতা দিন🤣😼",
-      "মেয়ে হলে বস সাহুর ইনবক্সে চলে যা 🤭🤣😼 𝐅𝐚𝐜𝐞𝐛𝐨𝐨𝐤 𝐋𝐈𝐧𝐤 : https://www.facebook.com/100044713412032",
+      "মেয়ে হলে বস সাহুর ইনবক্সে চলে যা 🤭🤣😼 𝐅𝐚𝐜𝐞𝐛𝐨𝐨𝐤 𝐋𝐢𝐧𝐤 : https://www.facebook.com/100044713412032",
       "হুদাই আমারে শয়তানে লারে-😝😑☹️",
       "-𝗜 𝗟𝗢𝗩𝗘 𝗬𝗢𝗨-😽-আহারে ভাবছো তোমারে প্রোপজ করছি-🥴-থাপ্পর দিয়া কিডনী লক করে দিব-😒-ভুল পড়া বের করে দিবো-🤭🐸",
       "-আমি একটা দুধের শিশু-😇-🫵𝗬𝗢𝗨🐸💦",
@@ -529,7 +554,7 @@ module.exports.handleEvent = async function ({ api, event, Users }) {
       "-ইস কেউ যদি বলতো-🙂-আমার শুধু তোমাকেই লাগবে-💜🌸",
       "-ওই বেডি তোমার বাসায় না আমার বস সাহু মেয়ে দেখতে গেছিলো-🙃-নাস্তা আনারস আর দুধ দিছো-🙄🤦‍♂️-বইন কইলেই তো হয় বয়ফ্রেন্ড আছে-🥺🤦‍♂-আমার বস সাহু কে জানে মারার কি দরকার-🙄🤧",
       "-একদিন সে ঠিকই ফিরে তাকাবে-😇-আর মুচকি হেসে বলবে ওর মতো আর কেউ ভালবাসেনি-🙂😅",
-      "-হুদাই গ্রুপে আছি-🥺🐸-কেও ইনবক্সে নক দিয়ে বলে না জান তোমারে আমি অনেক ভালোবাসি-🥺🤧",
+      "-হুদাই গ্রুপে আছি-🥺🐸-কেও ইনব নক দিয়ে বলে না জান তোমারে আমি অনেক ভালোবাসি-🥺🤧",
       "কি'রে গ্রুপে দেখি একটাও বেডি নাই-🤦‍🥱💦",
       "-দেশের সব কিছুই চুরি হচ্ছে-🙄-শুধু আমার বস সাহু এর মনটা ছাড়া-🥴😑😏",
       "-𝫤তোমারে প্রচুর ভাল্লাগে-😽-সময় মতো প্রপোজ করমু বুঝছো-🔨😼-ছিট খালি রাইখো- 🥱🐸🥵",
@@ -601,7 +626,7 @@ module.exports.handleEvent = async function ({ api, event, Users }) {
             global.client.handleReply.push({
               name: module.exports.config.name,
               messageID: info.messageID,
-            author: senderID,
+              author: senderID,
               type: "simsimi"
             });
           }
