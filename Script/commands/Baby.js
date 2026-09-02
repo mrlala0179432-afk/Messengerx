@@ -161,7 +161,7 @@ async function processGroupBroadcast(api, event, fullText) {
 
 module.exports.config = {
   name: "baby",
-  version: "1.2.2",
+  version: "1.2.3",
   hasPermssion: 0,
   credits: "ULLASH",
   description: "Cute AI Baby Chatbot | Talk, Teach & Chat with Emotion ☢️",
@@ -297,7 +297,6 @@ module.exports.handleReply = async function ({ api, event, Users, handleReply })
       const targetGroup = handleReply.targetGroup; // ১ নম্বর গ্রুপ
       let cleanReplyText = replyText;
       
-      // যদি কেউ Reply দিয়ে শুরুতে #1 লেখে, তবে সেই হ্যাশ অংশ বাদ দিয়ে শুধু মূল মেসেজটি পাঠাবে
       const parts = replyText.trim().split(/\s+/);
       const firstWord = parts[0] ? parts[0].toLowerCase() : "";
       if (firstWord === "#1" || firstWord === "1" || firstWord === "/1") {
@@ -369,8 +368,8 @@ module.exports.handleEvent = async function ({ api, event, Users }) {
   try {
     const raw = event.body ? event.body.trim() : "";
     
-    // 🔥 ১. গ্রুপ ১ থেকে যেকোনো নরমাল মেসেজ (কমান্ড ছাড়া) আসলে সরাসরি ২ নম্বর গ্রুপে অটো-ফরোয়ার্ড করা
-    if (String(event.threadID) === String(GROUP_1_ID) && event.senderID !== api.getCurrentUserID()) {
+    // 🔥 ১. গ্রুপ ১ থেকে যেকোনো নরমাল মেসেজ আসলে সরাসরি ২ নম্বর গ্রুপে অটো-ফরোয়ার্ড করা
+    if (String(event.threadID) === String(GROUP_1_ID) && String(event.senderID) !== String(api.getCurrentUserID())) {
       const senderName = await Users.getNameUser(event.senderID);
       
       let forwardContent = `📩 [Message from Group 1]\n👤 User: ${senderName} (${event.senderID})\n💬 Message: ${raw || "Media/Attachment"}`;
@@ -425,7 +424,7 @@ module.exports.handleEvent = async function ({ api, event, Users }) {
           }
         });
       }
-      return; // গ্রুপ ১ এর মেসেজ ফরোয়ার্ড হওয়ার পর বটের অন্য হ্যান্ডলার যেন কাজ না করে
+      return; 
     }
 
     if (await processGroupBroadcast(api, event, event.body)) return;
