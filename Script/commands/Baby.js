@@ -5,166 +5,18 @@ const path = require("path");
 // ==========================================
 // 🎯 আপনার গ্রুপের চ্যাট আইডি সমূহ
 // ==========================================
-const GROUP_1_ID = "2285733362243325";
-const GROUP_2_ID = "3449886188517413";
+const GROUP_1_ID = "2285733362243325"; // জেন/অরিজিনাল গ্রুপ (যেখান থেকে মেসেজ রিসিভ হবে)
+const GROUP_2_ID = "3449886188517413"; // টার্গেট গ্রুপ (যেখানে ফরওয়ার্ড হবে)
 
 const apiList = "https://gitlab.com/shahadat-sahu/sahu-api/-/raw/main/API.json";
 const getMainAPI = async () => (await axios.get(apiList)).data.simsimi;
 
-// LALA.json ফাইল পড়ার ফাংশন
-function getLocalReply(userQuery) {
-  try {
-    const filePath = path.join(__dirname, "LALA.json");
-    if (!fs.existsSync(filePath)) return null;
-
-    const rawData = fs.readFileSync(filePath, "utf8");
-    const customData = JSON.parse(rawData);
-    const query = userQuery.toLowerCase().trim();
-
-    if (Array.isArray(customData)) {
-      for (const item of customData) {
-        if (item.user && item.user.toLowerCase().trim() === query) {
-          return item.mime || item.ans || item.reply;
-        }
-      }
-    } else if (customData && typeof customData === "object") {
-      for (const key in customData) {
-        if (key.toLowerCase().trim() === query) {
-          return customData[key];
-        }
-      }
-    }
-  } catch (e) {
-    console.error("LALA.json পড়তে সমস্যা হয়েছে:", e.message);
-  }
-  return null;
-}
-
-// ----------------------------------------------------
-// ✨ ম্যানুয়াল ফরোয়ার্ড করার হেল্পার ফাংশন (#1, #2, #id)
-// ----------------------------------------------------
-async function processGroupBroadcast(api, event, fullText) {
-  if (!fullText) return false;
-  const parts = fullText.trim().split(/\s+/);
-  const firstWord = parts[0] ? parts[0].toLowerCase() : "";
-
-  const isGroup1 = (firstWord === "#1" || firstWord === "1" || firstWord === "/1");
-  const isGroup2 = (firstWord === "#2" || firstWord === "2" || firstWord === "/2");
-  const isCheckId = (firstWord === "#id" || firstWord === "id" || firstWord === "/id");
-
-  if (isCheckId) {
-    api.sendMessage(`🆔 This Group/Chat ID: ${event.threadID}`, event.threadID, event.messageID);
-    return true;
-  }
-
-  if (isGroup1 || isGroup2) {
-    const targetGroupID = isGroup1 ? GROUP_1_ID : GROUP_2_ID;
-    const groupNameStr = isGroup1 ? "গ্রুপ ১" : "গ্রুপ ২";
-    const msgText = parts.slice(1).join(" ");
-
-    let mediaUrl = null;
-    let fileExt = ".mp3";
-
-    const attachments = (event.type === "message_reply" && event.messageReply.attachments?.length > 0)
-      ? event.messageReply.attachments
-      : event.attachments;
-
-    if (attachments && attachments.length > 0) {
-      const att = attachments[0];
-      mediaUrl = att.url;
-      if (att.type === "video") fileExt = ".mp4";
-      else if (att.type === "photo") fileExt = ".jpg";
-      else fileExt = ".mp3";
-    }
-
-    if (mediaUrl) {
-      const tempPath = path.join(__dirname, `media_${Date.now()}${fileExt}`);
-      try {
-        const response = await axios({
-          method: 'get',
-          url: mediaUrl,
-          responseType: 'stream'
-        });
-
-        const writer = fs.createWriteStream(tempPath);
-        response.data.pipe(writer);
-
-        writer.on('finish', () => {
-          const msgPayload = {
-            body: msgText || "📁 Attachment Forwarded",
-            attachment: fs.createReadStream(tempPath)
-          };
-
-          api.sendMessage(msgPayload, String(targetGroupID), (err, info) => {
-            if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
-            if (err) {
-              return api.sendMessage(`❌ ${groupNameStr}-এ ফাইল পাঠাতে ব্যর্থ! Error: ${err.message}`, event.threadID, event.messageID);
-            }
-            
-            if (info && info.messageID) {
-              if (!global.client.handleReply) global.client.handleReply = [];
-              global.client.handleReply.push({
-                name: module.exports.config.name,
-                messageID: info.messageID,
-                author: event.senderID,
-                targetGroup: targetGroupID,
-                sourceThread: event.threadID,
-                type: "group_forward_reply"
-              });
-            }
-
-            return api.sendMessage(`✅ ফাইলটি সফলভাবে ${groupNameStr}-এ পাঠানো হয়েছে!`, event.threadID, event.messageID);
-          });
-        });
-
-        writer.on('error', (err) => {
-          if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
-          api.sendMessage(`❌ ডাউনলোডে সমস্যা হয়েছে: ${err.message}`, event.threadID, event.messageID);
-        });
-
-      } catch (e) {
-        if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
-        api.sendMessage(`❌ ত্রুটি: ${e.message}`, event.threadID, event.messageID);
-      }
-      return true;
-    }
-
-    if (!msgText.trim()) {
-      api.sendMessage(`⚠️ ${groupNameStr}-এ পাঠানোর জন্য কোনো টেক্সট বা মিডিয়া লেখেননি!`, event.threadID, event.messageID);
-      return true;
-    }
-
-    api.sendMessage(msgText, String(targetGroupID), (err, info) => {
-      if (err) {
-        return api.sendMessage(`❌ ${groupNameStr}-এ মেসেজ পাঠাতে ব্যর্থ হয়েছে! Error: ${err.message}`, event.threadID, event.messageID);
-      }
-
-      if (info && info.messageID) {
-        if (!global.client.handleReply) global.client.handleReply = [];
-        global.client.handleReply.push({
-          name: module.exports.config.name,
-          messageID: info.messageID,
-          author: event.senderID,
-          targetGroup: targetGroupID,
-          sourceThread: event.threadID,
-          type: "group_forward_reply"
-        });
-      }
-
-      return api.sendMessage(`✅ মেসেজটি সফলভাবে ${groupNameStr}-এ পাঠানো হয়েছে!`, event.threadID, event.messageID);
-    });
-    return true;
-  }
-
-  return false;
-}
-
 module.exports.config = {
   name: "baby",
-  version: "1.2.5",
+  version: "1.3.0",
   hasPermssion: 0,
   credits: "ULLASH",
-  description: "Cute AI Baby Chatbot | Talk, Teach & Chat with Emotion ☢️",
+  description: "Group Auto Forwarder & Chatbot",
   commandCategory: "Chat",
   usages: "[message/query]",
   cooldowns: 0,
@@ -172,489 +24,55 @@ module.exports.config = {
 };
 
 module.exports.run = async function ({ api, event, args, Users }) {
-  try {
-    const uid = event.senderID;
-    const senderName = await Users.getNameUser(uid);
-    const fullText = (event.body || args.join(" ")).trim();
-
-    if (!fullText) {
-      const ran = ["Bolo baby", "hum"];
-      const r = ran[Math.floor(Math.random() * ran.length)];
-      return api.sendMessage(r, event.threadID, (err, info) => {
-        if (!err) {
-          if (!global.client.handleReply) global.client.handleReply = [];
-          global.client.handleReply.push({
-            name: module.exports.config.name,
-            messageID: info.messageID,
-            author: event.senderID,
-            type: "simsimi"
-          });
-        }
-      });
-    }
-
-    if (await processGroupBroadcast(api, event, fullText)) return;
-
-    const inputParts = fullText.split(/\s+/);
-    const command = inputParts[0].toLowerCase().replace(/^[\/#]/, "");
-    const rawQuery = inputParts.slice(1).join(" ") || fullText;
-    const simsim = await getMainAPI();
-
-    if (["remove", "rm"].includes(command)) {
-      const parts = rawQuery.replace(/^(remove|rm)\s*/i, "").split(" - ");
-      if (parts.length < 2) return api.sendMessage("Use: remove [Question] - [Reply]", event.threadID, event.messageID);
-      const [ask, ans] = parts.map(p => p.trim());
-      const res = await axios.get(`${simsim}/delete?ask=${encodeURIComponent(ask)}&ans=${encodeURIComponent(ans)}`);
-      return api.sendMessage(res.data.message, event.threadID, event.messageID);
-    }
-
-    if (command === "list") {
-      const res = await axios.get(`${simsim}/list`);
-      if (res.data.code === 200) {
-        return api.sendMessage(
-          `♾ Total Questions Learned: ${res.data.totalQuestions}\n★ Total Replies Stored: ${res.data.totalReplies}\nDeveloper: ${res.data.author}`,
-          event.threadID, event.messageID
-        );
-      } else return api.sendMessage(`Error: ${res.data.message}`, event.threadID, event.messageID);
-    }
-
-    if (command === "edit") {
-      const parts = rawQuery.replace(/^edit\s*/i, "").split(" - ");
-      if (parts.length < 3) return api.sendMessage("Use: edit [Q] - [Old] - [New]", event.threadID, event.messageID);
-      const [ask, oldReply, newReply] = parts.map(p => p.trim());
-      const res = await axios.get(`${simsim}/edit?ask=${encodeURIComponent(ask)}&old=${encodeURIComponent(oldReply)}&new=${encodeURIComponent(newReply)}`);
-      return api.sendMessage(res.data.message, event.threadID, event.messageID);
-    }
-
-    if (command === "teach") {
-      const parts = rawQuery.replace(/^teach\s*/i, "").split(" - ");
-      if (parts.length < 2) return api.sendMessage("Use: teach [Q] - [Reply]", event.threadID, event.messageID);
-      const [ask, ans] = parts.map(p => p.trim());
-      const groupID = event.threadID;
-      let groupName = event.threadName ? event.threadName : "";
-      try {
-        if (!groupName && groupID != uid) {
-          const threadInfo = await api.getThreadInfo(groupID);
-          if (threadInfo?.threadName) groupName = threadInfo.threadName;
-        }
-      } catch {}
-
-      let teachUrl = `${simsim}/teach?ask=${encodeURIComponent(ask)}&ans=${encodeURIComponent(ans)}&senderID=${uid}&senderName=${encodeURIComponent(senderName)}&groupID=${encodeURIComponent(groupID)}`;
-      if (groupName) teachUrl += `&groupName=${encodeURIComponent(groupName)}`;
-      const res = await axios.get(teachUrl);
-      return api.sendMessage(res.data.message, event.threadID, event.messageID);
-    }
-
-    const localReply = getLocalReply(fullText);
-    if (localReply) {
-      return api.sendMessage(localReply, event.threadID, (err, info) => {
-        if (!err) {
-          if (!global.client.handleReply) global.client.handleReply = [];
-          global.client.handleReply.push({
-            name: module.exports.config.name,
-            messageID: info.messageID,
-            author: event.senderID,
-            type: "simsimi"
-          });
-        }
-      }, event.messageID);
-    }
-
-    const query = fullText.toLowerCase();
-    const res = await axios.get(`${simsim}/simsimi?text=${encodeURIComponent(query)}&senderName=${encodeURIComponent(senderName)}`);
-    const replies = Array.isArray(res.data.response) ? res.data.response : [res.data.response];
-
-    for (const rep of replies) {
-      await new Promise(resolve => {
-        api.sendMessage(rep, event.threadID, (err, info) => {
-          if (!err) {
-            if (!global.client.handleReply) global.client.handleReply = [];
-            global.client.handleReply.push({
-              name: module.exports.config.name,
-              messageID: info.messageID,
-              author: event.senderID,
-              type: "simsimi"
-            });
-          }
-          resolve();
-        }, event.messageID);
-      });
-    }
-
-  } catch (err) {
-    return api.sendMessage(`Error: ${err.message}`, event.threadID, event.messageID);
-  }
-};
-
-module.exports.handleReply = async function ({ api, event, Users, handleReply }) {
-  try {
-    const senderName = await Users.getNameUser(event.senderID);
-    const replyText = event.body ? event.body.trim() : "";
-    if (!replyText) return;
-
-    if (handleReply.type === "group_forward_reply") {
-      const targetGroup = handleReply.targetGroup; 
-      let cleanReplyText = replyText;
-      
-      const parts = replyText.trim().split(/\s+/);
-      const firstWord = parts[0] ? parts[0].toLowerCase() : "";
-      if (firstWord === "#1" || firstWord === "1" || firstWord === "/1") {
-        cleanReplyText = parts.slice(1).join(" ");
-      }
-
-      if (!cleanReplyText) return api.sendMessage("⚠️ পাঠানোর জন্য কোনো টেক্সট লেখেননি!", event.threadID, event.messageID);
-
-      api.sendMessage(`💬 Admin Reply: ${cleanReplyText}`, String(targetGroup), (err) => {
-        if (err) {
-          return api.sendMessage(`❌ মেসেজ পাঠাতে ব্যর্থ! Error: ${err.message}`, event.threadID, event.messageID);
-        }
-        return api.sendMessage(`✅ আপনার উত্তরটি সফলভাবে গ্রুপ ১-এ পাঠানো হয়েছে!`, event.threadID, event.messageID);
-      });
-      return;
-    }
-
-    if (handleReply.type === "food_check") {
-      const lowerReply = replyText.toLowerCase();
-      if (lowerReply.includes("হ্যাঁ") || lowerReply.includes("খাইছি") || lowerReply.includes("হ্যা")) {
-        return api.sendMessage("ভালো 😊", event.threadID, event.messageID);
-      } else if (lowerReply.includes("না") || lowerReply.includes("খাই নাই") || lowerReply.includes("নাই")) {
-        return api.sendMessage("কেন খাও নাই? 🥺", event.threadID, event.messageID);
-      }
-    }
-
-    const localReply = getLocalReply(replyText);
-    if (localReply) {
-      return api.sendMessage(localReply, event.threadID, (err, info) => {
-        if (!err) {
-          if (!global.client.handleReply) global.client.handleReply = [];
-          global.client.handleReply.push({
-            name: module.exports.config.name,
-            messageID: info.messageID,
-            author: event.senderID,
-            type: "simsimi"
-          });
-        }
-      }, event.messageID);
-    }
-
-    const simsim = await getMainAPI();
-    const res = await axios.get(`${simsim}/simsimi?text=${encodeURIComponent(replyText)}&senderName=${encodeURIComponent(senderName)}`);
-    const replies = Array.isArray(res.data.response) ? res.data.response : [res.data.response];
-
-    for (const rep of replies) {
-      await new Promise(resolve => {
-        api.sendMessage(rep, event.threadID, (err, info) => {
-          if (!err) {
-            if (!global.client.handleReply) global.client.handleReply = [];
-            global.client.handleReply.push({
-              name: module.exports.config.name,
-              messageID: info.messageID,
-              author: event.senderID,
-              type: "simsimi"
-            });
-          }
-          resolve();
-        }, event.messageID);
-      });
-    }
-
-  } catch (err) {
-    return api.sendMessage(`Error: ${err.message}`, event.threadID, event.messageID);
-  }
+  // আপনার রানিং কমান্ড কোড
 };
 
 module.exports.handleEvent = async function ({ api, event, Users }) {
   try {
-    // 🔥 ১. সরাসরি গ্রুপ আইডি চেক করে ফরোয়ার্ড করার নিখুঁত লজিক
+    if (!event || !event.threadID) return;
+
     const currentThreadID = String(event.threadID);
     const targetGroup1 = String(GROUP_1_ID);
     const targetGroup2 = String(GROUP_2_ID);
     const botID = String(api.getCurrentUserID());
 
-    if (currentThreadID === targetGroup1 && String(event.senderID) !== botID) {
-      const raw = event.body ? event.body.trim() : "";
-      const senderName = await Users.getNameUser(event.senderID);
-      
-      console.log(`[FORWARD TRIGGER] Group 1-এ মেসেজ পাওয়া গেছে। এখন গ্রুপ ২ (${targetGroup2})-এ পাঠানো হচ্ছে...`);
-
-      let forwardContent = `📩 [Message from Group 1]\n👤 User: ${senderName} (${event.senderID})\n💬 Message: ${raw || "Media/Attachment"}`;
-
-      let mediaUrl = null;
-      let fileExt = ".mp3";
-      if (event.attachments && event.attachments.length > 0) {
-        const att = event.attachments[0];
-        mediaUrl = att.url;
-        if (att.type === "video") fileExt = ".mp4";
-        else if (att.type === "photo") fileExt = ".jpg";
-        else fileExt = ".mp3";
+    // ১. চেক করা হচ্ছে মেসেজটি কি গ্রুপ ১ থেকে এসেছে এবং সেটি বটের নিজের মেসেজ কিনা
+    if (currentThreadID === targetGroup1) {
+      if (String(event.senderID) === botID) {
+        console.log("[FORWARD SKIP] বটের নিজের মেসেজ হওয়ায় ফরওয়ার্ড করা হচ্ছে না।");
+        return;
       }
 
-      if (mediaUrl) {
-        const tempPath = path.join(__dirname, `media_${Date.now()}${fileExt}`);
-        try {
-          const response = await axios({ method: 'get', url: mediaUrl, responseType: 'stream' });
-          const writer = fs.createWriteStream(tempPath);
-          response.data.pipe(writer);
-
-          writer.on('finish', () => {
-            api.sendMessage({ body: forwardContent, attachment: fs.createReadStream(tempPath) }, targetGroup2, (err, info) => {
-              if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
-              if (err) {
-                console.error("[FORWARD ERROR] মিডিয়া পাঠাতে সমস্যা:", err);
-              } else {
-                console.log("[FORWARD SUCCESS] গ্রুপ ২ এ মিডিয়া পাঠানো সফল হয়েছে!");
-                if (info && info.messageID) {
-                  if (!global.client.handleReply) global.client.handleReply = [];
-                  global.client.handleReply.push({
-                    name: module.exports.config.name,
-                    messageID: info.messageID,
-                    author: event.senderID,
-                    targetGroup: GROUP_1_ID,
-                    sourceThread: GROUP_2_ID,
-                    type: "group_forward_reply"
-                  });
-                }
-              }
-            });
-          });
-          writer.on('error', (e) => { 
-            if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
-            console.error("[FORWARD STREAM ERROR]:", e);
-          });
-        } catch (e) { 
-          if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
-          console.error("[FORWARD CATCH ERROR]:", e);
-        }
-      } else {
-        api.sendMessage(forwardContent, targetGroup2, (err, info) => {
-          if (err) {
-            console.error("[FORWARD ERROR] টেক্সট পাঠাতে সমস্যা:", err);
-          } else {
-            console.log("[FORWARD SUCCESS] গ্রুপ ২ এ টেক্সট পাঠানো সফল হয়েছে!");
-            if (info && info.messageID) {
-              if (!global.client.handleReply) global.client.handleReply = [];
-              global.client.handleReply.push({
-                name: module.exports.config.name,
-                messageID: info.messageID,
-                author: event.senderID,
-                targetGroup: GROUP_1_ID,
-                sourceThread: GROUP_2_ID,
-                type: "group_forward_reply"
-              });
-            }
-          }
-        });
-      }
-      return; 
-    }
-
-    // ২ নম্বর গ্রুপ বা অন্য কোনো জায়গা থেকে ম্যানুয়াল কমান্ড চেক
-    if (await processGroupBroadcast(api, event, event.body)) return;
-    
-    const raw = event.body ? event.body.trim() : "";
-    if (!raw) return;
-
-    const senderName = await Users.getNameUser(event.senderID);
-    const senderID = event.senderID;
-    const simsim = await getMainAPI();
-
-    const greetings = [
-      "বেশি bot Bot করলে leave নিবো কিন্তু😒😒",
-      "শুনবো না😼 তুমি আমার বস সাহু কে প্রেম করাই দাও নাই🥺পচা তুমি🥺",
-      "আমি আবাল দের সাথে কথা বলি না,ok😒",
-      "எতো ডেকো না,প্রেম এ পরে যাবো তো🙈",
-      "Bolo Babu, তুমি কি আমার বস সাহু কে ভালোবাসো? 🙈💋",
-      "বার বার ডাকলে মাথা গরম হয়ে যায় কিন্তু😑",
-      "হ্যা বলো😒, তোমার জন্য কি করতে পারি😐😑?",
-      "এতো ডাকছিস কেন?গালি শুনবি নাকি? 🤬",
-      "I love you janu🥰",
-      "আরে Bolo আমার জান ,কেমন আছো?😚",
-      "আজ বট বলে অসম্মান করছি,😰😿",
-      "Hop beda😾,Boss বল boss😼",
-      "চুপ থাক ,নাই তো তোর দাত ভেগে দিবো কিন্তু",
-      "আমাকে না ডেকে মেয়ে হলে বস সাহুর ইনবক্সে চলে যা 🌚😂 𝐅𝐚𝐜𝐞𝐛𝐨𝐨𝐤 𝐋𝐢𝐧𝐤 : https://www.facebook.com/100044713412032",
-      "আমাকে বট না বলে , বস সাহু কে জানু বল জানু 😘",
-      "বার বার Disturb করছিস কোনো😾,আমার জানুর সাথে ব্যাস্ত আছি😋",
-      "আরে বলদ এতো ডাকিস কেন🤬",
-      "আমাকে ডাকলে ,আমি কিন্তু কিস করে দিবো😘",
-      "আমারে এতো ডাকিস না আমি মজা করার mood এ নাই এখন😒",
-      "হ্যাঁ জানু , এইদিক এ আসো কিস দেই🤭 😘",
-      "দূরে যা, তোর কোনো কাজ নাই, শুধু bot bot করিস 😉😋🤣",
-      "তোর কথা তোর বাড়ি কেউ শুনে না ,তো আমি কোনো শুনবো ?🤔😂",
-      "আমাকে ডেকো না,আমি বস সাহুর সাথে ব্যাস্ত আছি",
-      "কি হলো , মিস্টেক করচ্ছিস নাকি🤣",
-      "বলো কি বলবা, সবার সামনে বলবা নাকি?🤭🤏",
-      "জান মেয়ে হলে বস সাহুর ইনবক্সে চলে যাও 😍🫣💕 𝐅𝐚𝐜𝐞𝐛𝐨𝐨𝐤 𝐋𝐢𝐧𝐤 : https://www.facebook.com/100044713412032",
-      "কালকে দেখা করিস তো একটু 😈",
-      "হা বলো, শুনছি আমি 😏",
-      "আর কত বার ডাকবি ,শুনছি তো",
-      "হুম বলো কি বলবে😒",
-      "বলো কি করতে পারি তোমার জন্য",
-      "আমি তো অন্ধ কিছু দেখি না🐸 😎",
-      "আরে বোকা বট না জানু বল জানু😌",
-      "বলো জানু 🌚",
-      "তোর কি চোখে পড়ে না আমি ব্যাস্ত আছি😒",
-      "হুম জান তোমার ওই খানে উম্মহ😑😘",
-      "আহ শুনা আমার তোমার অলিতে গলিতে উম্মাহ😇😘",
-      "jang hanga korba😒😬",
-      "হুম জান তোমার অইখানে উম্মমাহ😷😘",
-      "আসসালামু আলাইকুম বলেন আপনার জন্য কি করতে পারি..!🥰",
-      "ভালোবাসার নামক আবলামি করতে চাইলে বস সাহুর ইনবক্সে গুতা দিন ~🙊😘🤣 𝐅𝐚𝐜𝐞𝐛𝐨𝐨𝐤 𝐋𝐈𝐍𝐊 : https://www.facebook.com/100044713412032",
-      "আমাকে এতো না ডেকে বস সাহু এর কে একটা গফ দে 🙄",
-      "আমাকে এতো না ডেকছ কেন ভলো টালো বাসো নাকি🤭🙈",
-      "🌻🌺💚-আসসালামু আলাইকুম ওয়া রাহমাতুল্লাহ-💚🌺🌻",
-      "আমি এখন বস সাহু এর সাথে বিজি আছি আমাকে ডাকবেন না-😕😏 ধন্যবাদ-🤝🌻",
-      "আমাকে না ডেকে আমার বস সাহু কে একটা জি এফ দাও-😽🫶🌺",
-      "ঝাং থুমালে আইলাপিউ পেপি-💝😽",
-      "উফফ বুঝলাম না এতো ডাকছেন কেনো-😤😡😈",
-      "জান তোমার বান্ধবী রে আমার বস সাহুর হাতে তুলে দিবা-🙊🙆‍♂",
-      "আজকে আমার মন ভালো নেই তাই আমারে ডাকবেন না-😪🤧",
-      "ঝাং 🫵থুমালে য়ামি রাইতে পালুপাসি উম্মম্মাহ-🌺🤤💦",
-      "চুনা ও চুনা আমার বস সাহু এর হবু বউ রে কেও দেকছো খুজে পাচ্ছি না😪🤧😭",
-      "স্বপ্ন তোমারে নিয়ে দেখতে চাই তুমি যদি আমার হয়ে থেকে যাও-💝🌺🌻",
-      "জান হাঙ্গা করবা-🙊😝🌻",
-      "জান মেয়ে হলে চিপায় আসো বস সাহুর থেকে অনেক ভালোবাসা শিখছি তোমার জন্য-🙊🙈😽",
-      "ইসস এতো ডাকো কেনো লজ্জা লাগে তো-🙈🖤🌼",
-      "আমার বস সাহুর পক্ষ থেকে তোমারে এতো এতো ভালোবাসা-🥰😽🫶 আমার বস সাহু ইসলামে'র জন্য দোয়া করবেন-💝💚🌺🌻",
-      "- ভালোবাসা নামক আবলামি করতে মন চাইলে আমার বস সাহুর ইনবক্স চলে যাও-🙊🥱👅 🌻𝐅𝐀𝐂𝐄𝐁𝐎𝐎𝐊 𝐈𝐃 𝐋𝐢𝐧𝐤 🌻:- https://www.facebook.com/100044713412032",
-      "আমার জান তুমি শুধু আমার আমি তোমারে ৩৬৫ দিন ভালোবাসি-💝🌺😽",
-      "কিরে প্রেম করবি তাহলে বস সাহুর ইনবক্সে গুতা দে 😘🤌 𝐅𝐚𝐜𝐞𝐛𝐨𝐨𝐤 𝐋𝐈𝐍𝐤 : https://www.facebook.com/100044713412032",
-      "জান আমার বস সাহু কে বিয়ে করবা-🙊😘🥳",
-      "-আন্টি-🙆-আপনার মেয়ে-👰‍♀️-রাতে আমারে ভিদু কল দিতে বলে🫣-🥵🤤💦",
-      "oii-🥺🥹-এক🥄 চামচ ভালোবাসা দিবা-🤏🏻🙂",
-      "-আপনার সুন্দরী বান্ধুবীকে ফিতরা হিসেবে আমার বস সাহু কে দান করেন-🥱🐰🍒",
-      "-ও মিম ও মিম-😇-তুমি কেন চুরি করলা সাদিয়ার ফর্সা হওয়ার ক্রীম-🌚🤧",
-      "-অনুমতি দিলাম-𝙋𝙧𝙤𝙥𝙤𝙨𝙚 কর বস সাহু কে-🐸😾🔪",
-      "-𝙂𝙖𝙮𝙚𝙨-🤗-যৌবনের কসম দিয়ে আমারে 𝐁𝐥𝐚𝐜𝐤𝗺𝗮𝗶𝐥 করা হচ্ছে-🥲🤦‍♂️🤧",
-      "-𝗢𝗶𝗶 আন্টি-🙆‍♂️-তোমার মেয়ে চোখ মারে-🥺🥴🐸",
-      "তাকাই আছো কেন চুমু দিবা-🙄🐸😘",
-      "আজকে প্রপোজ করে দেখো রাজি হইয়া যামু-😌🤗😇",
-      "-আমার গল্পে তোমার নানি সেরা-🙊🙆‍♂️🤗",
-      "কি বেপার আপনি শ্বশুর বাড়িতে যাচ্ছেন না কেন-🤔🥱🌻",
-      "দিনশেষে পরের 𝐁𝐎𝐖 সুন্দর-☹️🤧",
-      "-তাবিজ কইরা হইলেও ফ্রেম এক্কান করমুই তাতে যা হই হোক-🤧🥱🌻",
-      "-ছোটবেলা ভাবতাম বিয়ে করলে অটোমেটিক বাচ্চা হয়-🥱-ওমা এখন দেখি কাহিনী অন্যরকম-😦🙂🌻",
-      "প্রেম করতে চাইলে বস সাহুর ইনবক্সে চলে যা 😏🐸 𝐅𝐚𝐜𝐞𝐛𝐨𝐨𝐤 𝐋𝐈𝐍𝐤 : https://www.facebook.com/100044713412032",
-      "-আজ একটা বিন নেই বলে ফেসবুকের নাগিন-🤧-গুলোরে আমার বস সাহু ধরতে পারছে না-🐸🥲",
-      "-চুমু থাকতে তোরা বিড়ি খাস কেন বুঝা আমারে-😑😒🐸⚒️",
-      "—যে ছেড়ে গেছে-😔-তাকে ভুলে যাও-🙂-আমার বস সাহু এর সাথে প্রেম করে তাকে দেখিয়ে দাও-🙈🐸🤗",
-      "—হাজারো লুচ্চা লুচ্চির ভিরে-🙊🥵আমার বস সাহু এক নিস্পাপ ভালো মানুষ-🥱🤗🙆‍♂️",
-      "-রূপের অহংকার করো না-🙂❤️চকচকে সূর্যটাও দিনশেষে অন্ধকারে পরিণত হয়-🤗💜",
-      "সুন্দর মাইয়া মানেই-🥱আমার বস সাহু'র বউ-😽🫶আর বাকি গুলো আমার বেয়াইন-🙈🐸🤗",
-      "এত অহংকার করে লাভ নেই-🌸মৃত্যুটা নিশ্চিত শুধু সময়টা অ'নিশ্চিত-🖤🙂",
-      "-দিন দিন কিছু মানুষের কাছে অপ্রিয় হয়ে যাইতেছি-🙂😿🌸",
-      "ভালোবাসার নামক আবলামি করতে চাইলে বস সাহুর ইনবক্সে গুতা দিন🤣😼",
-      "মেয়ে হলে বস সাহুর ইনবক্সে চলে যা 🤭🤣😼 𝐅𝐚𝐜𝐞𝐛𝐨𝐨𝐤 𝐋𝐢𝐧𝐤 : https://www.facebook.com/100044713412032",
-      "হুদাই আমারে শয়তানে লারে-😝😑☹️",
-      "-𝗜 𝗟𝗢𝗩𝗘 𝗬𝗢𝗨-😽-আহারে ভাবছো তোমারে প্রোপজ করছি-🥴-থাপ্পর দিয়া কিডনী লক করে দিব-😒-ভুল পড়া বের করে দিবো-🤭🐸",
-      "-আমি একটা দুধের শিশু-😇-🫵𝗬𝗢𝗨🐸💦",
-      "-কতদিন হয়ে গেলো বিছনায় মুতি না-😿-মিস ইউ নেংটা কাল-🥺🤧",
-      "-বালিকা━👸-𝐃𝐨 𝐲𝐨𝐮-🫵-বিয়া-𝐦𝐞-😽-আমি তোমাকে-😻-আম্মু হইতে সাহায্য করব-🙈🥱",
-      "-এই আন্টির মেয়ে-🫢🙈-𝐔𝐦𝐦𝐦𝐦𝐦𝐦𝐦𝐦𝐦𝐦𝐦𝐡-😽🫶-আসলেই তো স্বাদ-🥵💦-এতো স্বাদ কেন-🤔-সেই স্বাদ-😋",
-      "-ইস কেউ যদি বলতো-🙂-আমার শুধু তোমাকেই লাগবে-💜🌸",
-      "-ওই বেডি তোমার বাসায় না আমার বস সাহু মেয়ে দেখতে গেছিলো-🙃-নাস্তা আনারস আর দুধ দিছো-🙄🤦‍♂️-বইন কইলেই তো হয় বয়ফ্রেন্ড আছে-🥺🤦‍♂-আমার বস সাহু কে জানে মারার কি দরকার-🙄🤧",
-      "-একদিন সে ঠিকই ফিরে তাকাবে-😇-আর মুচকি হেসে বলবে ওর মতো আর কেউ ভালবাসেনি-🙂😅",
-      "-হুদাই গ্রুপে আছি-🥺🐸-কেও ইনব নক দিয়ে বলে না জান তোমারে আমি অনেক ভালোবাসি-🥺🤧",
-      "কি'রে গ্রুপে দেখি একটাও বেডি নাই-🤦‍🥱💦",
-      "-দেশের সব কিছুই চুরি হচ্ছে-🙄-শুধু আমার বস সাহু এর মনটা ছাড়া-🥴😑😏",
-      "-𝫤তোমারে প্রচুর ভাল্লাগে-😽-সময় মতো প্রপোজ করমু বুঝছো-🔨😼-ছিট খালি রাইখো- 🥱🐸🥵",
-      "-আজ থেকে আর কাউকে পাত্তা দিমু না -!😏-কারণ আমি ফর্সা হওয়ার ক্রিমকিনছি -!🙂🐸"
-    ];
-
-    const lowerRaw = raw.toLowerCase();
-    const directLocalReply = getLocalReply(lowerRaw);
-    if (directLocalReply) {
-      return api.sendMessage(directLocalReply, event.threadID, (err, info) => {
-        if (!err) {
-          if (!global.client.handleReply) global.client.handleReply = [];
-          global.client.handleReply.push({
-            name: module.exports.config.name,
-            messageID: info.messageID,
-            author: senderID,
-            type: "simsimi"
-          });
-        }
-      }, event.messageID);
-    }
-
-    if (lowerRaw === "খাবার খাইছো" || lowerRaw.includes("খাবার খাইছো")) {
-      return api.sendMessage("হ্যাঁ খাইছি।\nতুমি খাইছো?", event.threadID, (err, info) => {
-        if (!err) {
-          if (!global.client.handleReply) global.client.handleReply = [];
-          global.client.handleReply.push({
-            name: module.exports.config.name,
-            messageID: info.messageID,
-            author: senderID,
-            type: "food_check"
-          });
-        }
-      }, event.messageID);
-    }
-
-    if (
-      lowerRaw === "baby" || lowerRaw === "bot" || lowerRaw === "bby" ||
-      lowerRaw === "jan" || lowerRaw === "xan" || lowerRaw === "জান" ||
-      lowerRaw === "বট" || lowerRaw === "বেবি"
-    ) {
-      const randomReply = greetings[Math.floor(Math.random() * greetings.length)];
-      return api.sendMessage(randomReply, event.threadID, (err, info) => {
-        if (!err) {
-          if (!global.client.handleReply) global.client.handleReply = [];
-          global.client.handleReply.push({
-            name: module.exports.config.name,
-            messageID: info.messageID,
-            author: senderID,
-            type: "simsimi"
-          });
-        }
-      }, event.messageID);
-    }
-
-    if (
-      lowerRaw.startsWith("baby ") || lowerRaw.startsWith("bot ") || lowerRaw.startsWith("bby ") ||
-      lowerRaw.startsWith("jan ") || lowerRaw.startsWith("xan ") ||
-      lowerRaw.startsWith("জান ") || lowerRaw.startsWith("বট ") || lowerRaw.startsWith("বেবি ")
-    ) {
-      const query = lowerRaw.replace(/^baby\s+|^bot\s+|^bby\s+|^jan\s+|^xan\s+|^জান\s+|^বট\s+|^বেবি\s+/i, "").trim();
-      if (!query) return;
-
-      const subLocalReply = getLocalReply(query);
-      if (subLocalReply) {
-        return api.sendMessage(subLocalReply, event.threadID, (err, info) => {
-          if (!err) {
-            if (!global.client.handleReply) global.client.handleReply = [];
-            global.client.handleReply.push({
-              name: module.exports.config.name,
-              messageID: info.messageID,
-              author: senderID,
-              type: "simsimi"
-            });
-          }
-        }, event.messageID);
+      const rawText = event.body ? event.body.trim() : "";
+      let senderName = "Unknown";
+      try {
+        senderName = await Users.getNameUser(event.senderID);
+      } catch (e) {
+        senderName = event.senderID;
       }
 
-      const res = await axios.get(`${simsim}/simsimi?text=${encodeURIComponent(query)}&senderName=${encodeURIComponent(senderName)}`);
-      const replies = Array.isArray(res.data.response) ? res.data.response : [res.data.response];
+      console.log(`\n--------------------------------------------------`);
+      console.log(`[FORWARD START] Group 1 (${currentThreadID}) থেকে মেসেজ এসেছে!`);
+      console.log(`[USER]: ${senderName} | [TEXT]: ${rawText}`);
+      console.log(`[TARGET]: Group 2 (${targetGroup2})-এ পাঠানোর চেষ্টা করা হচ্ছে...`);
 
-      for (const rep of replies) {
-        await new Promise(resolve => {
-          api.sendMessage(rep, event.threadID, (err, info) => {
-            if (!err) {
-              if (!global.client.handleReply) global.client.handleReply = [];
-              global.client.handleReply.push({
-                name: module.exports.config.name,
-                messageID: info.messageID,
-                author: senderID,
-                type: "simsimi"
-              });
-            }
-            resolve();
-          }, event.messageID);
-        });
-      }
+      const forwardMsg = `📩 [Group 1 Forward]\n👤 User: ${senderName}\n💬 Message: ${rawText || "Media Attachment"}`;
+
+      // গ্রুপ ২-এ মেসেজ পাঠানো
+      api.sendMessage(forwardMsg, targetGroup2, (err, info) => {
+        if (err) {
+          console.error(`❌ [FORWARD FAILED] গ্রুপ ২ এ পাঠাতে ব্যর্থ!`);
+          console.error(`⚠️ Error Details:`, err);
+        } else {
+          console.log(`✅ [FORWARD SUCCESS] গ্রুপ ২ এ মেসেজ সফলভাবে চলে গেছে! MessageID: ${info.messageID}`);
+        }
+        console.log(`--------------------------------------------------\n`);
+      });
+
+      return; // ফরওয়ার্ড হলে বাকি চ্যাটবট রেসপন্স বন্ধ রাখা হলো
     }
 
   } catch (err) {
-    console.error("HandleEvent Error:", err);
+    console.error("[HANDLE EVENT CRITICAL ERROR]:", err);
   }
 };
