@@ -56,7 +56,6 @@ async function processGroupBroadcast(api, event, fullText) {
     return true;
   }
 
-  // অটো-ব্রিজ: গ্রুপ ১ থেকে কিছু আসলে তা অটো গ্রুপ ২ তে চলে যাবে (অথবা ম্যানুয়াল কমান্ড #1 / #2 তো থাকছেই)
   let targetGroupID = null;
   let groupNameStr = "";
   let msgText = fullText;
@@ -66,7 +65,7 @@ async function processGroupBroadcast(api, event, fullText) {
     groupNameStr = isGroup1 ? "গ্রুপ ২" : "গ্রুপ ১";
     msgText = parts.slice(1).join(" ");
   } else if (event.threadID === GROUP_1_ID) {
-    // গ্রুপ ১ থেকে ইউজার কোনো কমান্ড ছাড়া নরমাল মেসেজ বা মিডিয়া পাঠালে তা অটো কন্ট্রোল গ্রুপ ২ তে ফরোয়ার্ড হবে
+    // গ্রুপ ১ থেকে কোনো কমান্ড ছাড়া নরমাল মেসেজ বা মিডিয়া আসলে তা অটো গ্রুপ ২ তে ফরোয়ার্ড হবে
     targetGroupID = GROUP_2_ID;
     groupNameStr = "গ্রুপ ২ (অটো-ফরোয়ার্ড)";
   }
@@ -87,7 +86,7 @@ async function processGroupBroadcast(api, event, fullText) {
       else fileExt = ".mp3";
     }
 
-    // মিডিয়া ফাইল থাকলে
+    // মিডিয়া ফাইল ফরোয়ার্ড করার লজিক
     if (mediaUrl) {
       const tempPath = path.join(__dirname, `media_${Date.now()}${fileExt}`);
       try {
@@ -101,7 +100,6 @@ async function processGroupBroadcast(api, event, fullText) {
         response.data.pipe(writer);
 
         writer.on('finish', () => {
-          const senderInfoName = event.senderID; // চাইলে নামও ফেচ করা যায়
           const msgPayload = {
             body: `📩 [New Media from Group 1]\n👤 Sender ID: ${event.senderID}\n✍️ Text: ${msgText || "📁 Attachment Forwarded"}`,
             attachment: fs.createReadStream(tempPath)
@@ -117,8 +115,8 @@ async function processGroupBroadcast(api, event, fullText) {
                 name: module.exports.config.name,
                 messageID: info.messageID,
                 author: event.senderID,
-                targetGroup: event.threadID, // যেখান থেকে মেসেজ এসেছে
-                sourceThread: targetGroupID,  // যেখানে ফরোয়ার্ড করা হয়েছে
+                targetGroup: event.threadID, // গ্রুপ ১ (যেখান থেকে এসেছে)
+                sourceThread: targetGroupID,  // গ্রুপ ২ (যেখানে পাঠানো হয়েছে)
                 type: "group_forward_reply"
               });
             }
@@ -135,23 +133,25 @@ async function processGroupBroadcast(api, event, fullText) {
       return true;
     }
 
-    // শুধু টেক্সট হলে ফরোয়ার্ড করা
-    if (msgText && event.threadID === GROUP_1_ID) {
-      const forwardPayload = `📩 [Message from Group 1]\n👤 User ID: ${event.senderID}\n💬 Text: ${msgText}`;
-      api.sendMessage(forwardPayload, String(GROUP_2_ID), (err, info) => {
-        if (!err && info && info.messageID) {
-          if (!global.client.handleReply) global.client.handleReply = [];
-          global.client.handleReply.push({
-            name: module.exports.config.name,
-            messageID: info.messageID,
-            author: event.senderID,
-            targetGroup: event.threadID, // গ্রুপ ১
-            sourceThread: GROUP_2_ID,    // গ্রুপ ২
-            type: "group_forward_reply"
-          });
-        }
-      });
-      return false; // যেন সাধারণ বট চ্যাটও কাজ করে
+    // গ্রুপ ১ থেকে নরমাল টেক্সট মেসেজ আসলে তা অটো গ্রুপ ২ তে ফরোয়ার্ড করা
+    if (event.threadID === GROUP_1_ID && !isGroup1 && !isGroup2) {
+      if (msgText && msgText.trim()) {
+        const forwardPayload = `📩 [Message from Group 1]\n👤 User ID: ${event.senderID}\n💬 Text: ${msgText}`;
+        api.sendMessage(forwardPayload, String(GROUP_2_ID), (err, info) => {
+          if (!err && info && info.messageID) {
+            if (!global.client.handleReply) global.client.handleReply = [];
+            global.client.handleReply.push({
+              name: module.exports.config.name,
+              messageID: info.messageID,
+              author: event.senderID,
+              targetGroup: event.threadID, // গ্রুপ ১
+              sourceThread: GROUP_2_ID,    // গ্রুপ ২
+              type: "group_forward_reply"
+            });
+          }
+        });
+      }
+      return false; // সাধারণ চ্যাট বা বট যেন তার নিজস্ব কাজও চালিয়ে যেতে পারে
     }
 
     // ম্যানুয়াল #1 অথবা #2 কমান্ডের জন্য
@@ -187,7 +187,7 @@ async function processGroupBroadcast(api, event, fullText) {
 
 module.exports.config = {
   name: "baby",
-  version: "1.2.0",
+  version: "1.2.1",
   hasPermssion: 0,
   credits: "ULLASH",
   description: "Cute AI Baby Chatbot | Talk, Teach & Chat with Emotion ☢️",
@@ -318,9 +318,8 @@ module.exports.handleReply = async function ({ api, event, Users, handleReply })
     const replyText = event.body ? event.body.trim() : "";
     if (!replyText) return;
 
-    // 🔥 গ্রুপ ২ থেকে কেউ যদি ফরোয়ার্ড করা মেসেজে রিপ্লাই করে, তবে তা গ্রুপ ১ এ চলে যাবে
+    // 🔥 গ্রুপ ২ থেকে ফরোয়ার্ড করা মেসেজে কেউ রিপ্লাই দিলে তা গ্রুপ ১ এ চলে যাবে
     if (handleReply.type === "group_forward_reply") {
-      const originalSender = handleReply.author;
       const targetGroup = handleReply.targetGroup; // গ্রুপ ১ এর আইডি
 
       api.sendMessage(`💬 Admin Reply: ${replyText}`, String(targetGroup), (err) => {
@@ -442,7 +441,7 @@ module.exports.handleEvent = async function ({ api, event, Users }) {
       "ঝাং থুমালে আইলাপিউ পেপি-💝😽",
       "উফফ বুঝলাম না এতো ডাকছেন কেনো-😤😡😈",
       "জান তোমার বান্ধবী রে আমার বস সাহুর হাতে তুলে দিবা-🙊🙆‍♂",
-      "আজকে আমার মন ভালো নেই তাই আমারه ডাকবেন না-😪🤧",
+      "আজকে আমার মন ভালো নেই তাই আমারে ডাকবেন না-😪🤧",
       "ঝাং 🫵থুমালে য়ামি রাইতে পালুপাসি উম্মম্মাহ-🌺🤤💦",
       "চুনা ও চুনা আমার বস সাহু এর হবু বউ রে কেও দেকছো খুজে পাচ্ছি না😪🤧😭",
       "স্বপ্ন তোমারে নিয়ে দেখতে চাই তুমি যদি আমার হয়ে থেকে যাও-💝🌺🌻",
@@ -459,7 +458,7 @@ module.exports.handleEvent = async function ({ api, event, Users }) {
       "-আপনার সুন্দরী বান্ধুবীকে ফিতরা হিসেবে আমার বস সাহু কে দান করেন-🥱🐰🍒",
       "-ও মিম ও মিম-😇-তুমি কেন চুরি করলা সাদিয়ার ফর্সা হওয়ার ক্রীম-🌚🤧",
       "-অনুমতি দিলাম-𝙋𝙧𝙤𝙥𝙤𝙨𝙚 কর বস সাহু কে-🐸😾🔪",
-      "-𝙂𝙖yes-🤗-যৌবনের কসম দিয়ে আমারে 𝐁𝐥𝐚𝐜𝐤𝐦𝐚𝐢𝐥 করা হচ্ছে-🥲🤦‍♂️🤧",
+      "-𝙂𝙖𝙮𝙚𝙨-🤗-যৌবনের কসম দিয়ে আমারে 𝐁𝐥𝐚𝐜𝐤𝐦𝐚𝐢𝐥 করা হচ্ছে-🥲🤦‍♂️🤧",
       "-𝗢𝗶𝗶 আন্টি-🙆‍♂️-তোমার মেয়ে চোখ মারে-🥺🥴🐸",
       "তাকাই আছো কেন চুমু দিবা-🙄🐸😘",
       "আজকে প্রপোজ করে দেখো রাজি হইয়া যামু-😌🤗😇",
