@@ -7,8 +7,9 @@ dialect = dialect[0];
 storage = resolve(__dirname, `../${DATABASE[dialect].storage}`);
 
 module.exports.sequelize = new Sequelize({
-  dialect,
-  storage,
+  dialect: dialect,
+  dialectModule: require('better-sqlite3'),
+  storage: storage,
   pool: {
     max: 20,
     min: 0,
