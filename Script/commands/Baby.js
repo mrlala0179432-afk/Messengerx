@@ -3,7 +3,7 @@ const fs = require("fs");
 const path = require("path");
 
 // ==========================================
-// 🎯 আপনার দেওয়া গ্রুপের চ্যাট আইডি সমূহ (টু-ওয়ে কন্ট্রোল সিস্টেমের জন্য)
+// 🎯 আপনার দেওয়া গ্রুপের চ্যাট আইডি সমূহ
 // ==========================================
 const GROUP_1_ID = "2285733362243325";
 const GROUP_2_ID = "3449886188517413";
@@ -41,10 +41,11 @@ function getLocalReply(userQuery) {
 }
 
 // ----------------------------------------------------
-// ✨ গ্রুপ ১ ও ২-এ মিডিয়া এবং টেক্সট ফরওয়ার্ড করার হেল্পার ফাংশন
+// ✨ ম্যানুয়াল ফরোয়ার্ড করার হেল্পার ফাংশন (#1, #2, #id)
 // ----------------------------------------------------
 async function processGroupBroadcast(api, event, fullText) {
-  const parts = fullText ? fullText.trim().split(/\s+/) : [];
+  if (!fullText) return false;
+  const parts = fullText.trim().split(/\s+/);
   const firstWord = parts[0] ? parts[0].toLowerCase() : "";
 
   const isGroup1 = (firstWord === "#1" || firstWord === "1" || firstWord === "/1");
@@ -56,21 +57,11 @@ async function processGroupBroadcast(api, event, fullText) {
     return true;
   }
 
-  let targetGroupID = null;
-  let groupNameStr = "";
-  let msgText = fullText;
-
   if (isGroup1 || isGroup2) {
-    targetGroupID = isGroup1 ? GROUP_2_ID : GROUP_1_ID;
-    groupNameStr = isGroup1 ? "গ্রুপ ২" : "গ্রুপ ১";
-    msgText = parts.slice(1).join(" ");
-  } else if (event.threadID === GROUP_1_ID) {
-    // গ্রুপ ১ থেকে কোনো কমান্ড ছাড়া নরমাল মেসেজ বা মিডিয়া আসলে তা অটো গ্রুপ ২ তে ফরোয়ার্ড হবে
-    targetGroupID = GROUP_2_ID;
-    groupNameStr = "গ্রুপ ২ (অটো-ফরোয়ার্ড)";
-  }
+    const targetGroupID = isGroup1 ? GROUP_1_ID : GROUP_2_ID;
+    const groupNameStr = isGroup1 ? "গ্রুপ ১" : "গ্রুপ ২";
+    const msgText = parts.slice(1).join(" ");
 
-  if (targetGroupID) {
     let mediaUrl = null;
     let fileExt = ".mp3";
 
@@ -86,7 +77,6 @@ async function processGroupBroadcast(api, event, fullText) {
       else fileExt = ".mp3";
     }
 
-    // মিডিয়া ফাইল ফরোয়ার্ড করার লজিক
     if (mediaUrl) {
       const tempPath = path.join(__dirname, `media_${Date.now()}${fileExt}`);
       try {
@@ -101,13 +91,15 @@ async function processGroupBroadcast(api, event, fullText) {
 
         writer.on('finish', () => {
           const msgPayload = {
-            body: `📩 [New Media from Group 1]\n👤 Sender ID: ${event.senderID}\n✍️ Text: ${msgText || "📁 Attachment Forwarded"}`,
+            body: msgText || "📁 Attachment Forwarded",
             attachment: fs.createReadStream(tempPath)
           };
 
           api.sendMessage(msgPayload, String(targetGroupID), (err, info) => {
             if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
-            if (err) return;
+            if (err) {
+              return api.sendMessage(`❌ ${groupNameStr}-এ ফাইল পাঠাতে ব্যর্থ! Error: ${err.message}`, event.threadID, event.messageID);
+            }
             
             if (info && info.messageID) {
               if (!global.client.handleReply) global.client.handleReply = [];
@@ -115,71 +107,53 @@ async function processGroupBroadcast(api, event, fullText) {
                 name: module.exports.config.name,
                 messageID: info.messageID,
                 author: event.senderID,
-                targetGroup: event.threadID, // গ্রুপ ১ (যেখান থেকে এসেছে)
-                sourceThread: targetGroupID,  // গ্রুপ ২ (যেখানে পাঠানো হয়েছে)
+                targetGroup: targetGroupID,
+                sourceThread: event.threadID,
                 type: "group_forward_reply"
               });
             }
+
+            return api.sendMessage(`✅ ফাইলটি সফলভাবে ${groupNameStr}-এ পাঠানো হয়েছে!`, event.threadID, event.messageID);
           });
         });
 
-        writer.on('error', () => {
+        writer.on('error', (err) => {
           if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+          api.sendMessage(`❌ ডাউনলোডে সমস্যা হয়েছে: ${err.message}`, event.threadID, event.messageID);
         });
 
       } catch (e) {
         if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+        api.sendMessage(`❌ ত্রুটি: ${e.message}`, event.threadID, event.messageID);
       }
       return true;
     }
 
-    // গ্রুপ ১ থেকে নরমাল টেক্সট মেসেজ আসলে তা অটো গ্রুপ ২ তে ফরোয়ার্ড করা
-    if (event.threadID === GROUP_1_ID && !isGroup1 && !isGroup2) {
-      if (msgText && msgText.trim()) {
-        const forwardPayload = `📩 [Message from Group 1]\n👤 User ID: ${event.senderID}\n💬 Text: ${msgText}`;
-        api.sendMessage(forwardPayload, String(GROUP_2_ID), (err, info) => {
-          if (!err && info && info.messageID) {
-            if (!global.client.handleReply) global.client.handleReply = [];
-            global.client.handleReply.push({
-              name: module.exports.config.name,
-              messageID: info.messageID,
-              author: event.senderID,
-              targetGroup: event.threadID, // গ্রুপ ১
-              sourceThread: GROUP_2_ID,    // গ্রুপ ২
-              type: "group_forward_reply"
-            });
-          }
+    if (!msgText.trim()) {
+      api.sendMessage(`⚠️ ${groupNameStr}-এ পাঠানোর জন্য কোনো টেক্সট বা মিডিয়া লেখেননি!`, event.threadID, event.messageID);
+      return true;
+    }
+
+    api.sendMessage(msgText, String(targetGroupID), (err, info) => {
+      if (err) {
+        return api.sendMessage(`❌ ${groupNameStr}-এ মেসেজ পাঠাতে ব্যর্থ হয়েছে! Error: ${err.message}`, event.threadID, event.messageID);
+      }
+
+      if (info && info.messageID) {
+        if (!global.client.handleReply) global.client.handleReply = [];
+        global.client.handleReply.push({
+          name: module.exports.config.name,
+          messageID: info.messageID,
+          author: event.senderID,
+          targetGroup: targetGroupID,
+          sourceThread: event.threadID,
+          type: "group_forward_reply"
         });
       }
-      return false; // সাধারণ চ্যাট বা বট যেন তার নিজস্ব কাজও চালিয়ে যেতে পারে
-    }
 
-    // ম্যানুয়াল #1 অথবা #2 কমান্ডের জন্য
-    if (isGroup1 || isGroup2) {
-      if (!msgText.trim() && !mediaUrl) {
-        api.sendMessage(`⚠️ ${groupNameStr}-এ পাঠানোর জন্য কোনো টেক্সট বা মিডিয়া লেখেননি!`, event.threadID, event.messageID);
-        return true;
-      }
-
-      api.sendMessage(msgText, String(targetGroupID), (err, info) => {
-        if (err) {
-          return api.sendMessage(`❌ ${groupNameStr}-এ মেসেজ পাঠাতে ব্যর্থ হয়েছে! Error: ${err.message}`, event.threadID, event.messageID);
-        }
-        if (info && info.messageID) {
-          if (!global.client.handleReply) global.client.handleReply = [];
-          global.client.handleReply.push({
-            name: module.exports.config.name,
-            messageID: info.messageID,
-            author: event.senderID,
-            targetGroup: targetGroupID,
-            sourceThread: event.threadID,
-            type: "group_forward_reply"
-          });
-        }
-        return api.sendMessage(`✅ মেসেজটি সফলভাবে ${groupNameStr}-এ পাঠানো হয়েছে!`, event.threadID, event.messageID);
-      });
-      return true;
-    }
+      return api.sendMessage(`✅ মেসেজটি সফলভাবে ${groupNameStr}-এ পাঠানো হয়েছে!`, event.threadID, event.messageID);
+    });
+    return true;
   }
 
   return false;
@@ -187,7 +161,7 @@ async function processGroupBroadcast(api, event, fullText) {
 
 module.exports.config = {
   name: "baby",
-  version: "1.2.1",
+  version: "1.2.2",
   hasPermssion: 0,
   credits: "ULLASH",
   description: "Cute AI Baby Chatbot | Talk, Teach & Chat with Emotion ☢️",
@@ -318,15 +292,15 @@ module.exports.handleReply = async function ({ api, event, Users, handleReply })
     const replyText = event.body ? event.body.trim() : "";
     if (!replyText) return;
 
-    // 🔥 গ্রুপ ২ থেকে ফরোয়ার্ড করা মেসেজে কেউ রিপ্লাই দিলে তা গ্রুপ ১ এ চলে যাবে
+    // 🔥 ২ নম্বর গ্রুপ থেকে টেনে ধরে Reply দিলে ১ নম্বর গ্রুপে বার্তা পৌঁছে দেওয়া
     if (handleReply.type === "group_forward_reply") {
-      const targetGroup = handleReply.targetGroup; // গ্রুপ ১ এর আইডি
+      const targetGroup = handleReply.targetGroup; // ১ নম্বর গ্রুপ
 
       api.sendMessage(`💬 Admin Reply: ${replyText}`, String(targetGroup), (err) => {
         if (err) {
           return api.sendMessage(`❌ মেসেজ পাঠাতে ব্যর্থ! Error: ${err.message}`, event.threadID, event.messageID);
         }
-        return api.sendMessage(`✅ আপনার উত্তরটি সফলভাবে গ্রুপ ১ এ পাঠানো হয়েছে!`, event.threadID, event.messageID);
+        return api.sendMessage(`✅ আপনার উত্তরটি সফলভাবে গ্রুপ ১-এ পাঠানো হয়েছে!`, event.threadID, event.messageID);
       });
       return;
     }
@@ -383,7 +357,66 @@ module.exports.handleReply = async function ({ api, event, Users, handleReply })
 
 module.exports.handleEvent = async function ({ api, event, Users }) {
   try {
-    const raw = event.body ? event.body.toLowerCase().trim() : "";
+    const raw = event.body ? event.body.trim() : "";
+    
+    // 🔥 ১. গ্রুপ ১ থেকে যেকোনো নরমাল মেসেজ আসলে সরাসরি ২ নম্বর গ্রুপে অটো-ফরোয়ার্ড করা
+    if (String(event.threadID) === String(GROUP_1_ID) && event.senderID !== api.getCurrentUserID()) {
+      const senderName = await Users.getNameUser(event.senderID);
+      
+      let forwardContent = `📩 [Message from Group 1]\n👤 User: ${senderName} (${event.senderID})\n💬 Message: ${raw || "Media/Attachment"}`;
+
+      let mediaUrl = null;
+      let fileExt = ".mp3";
+      if (event.attachments && event.attachments.length > 0) {
+        const att = event.attachments[0];
+        mediaUrl = att.url;
+        if (att.type === "video") fileExt = ".mp4";
+        else if (att.type === "photo") fileExt = ".jpg";
+        else fileExt = ".mp3";
+      }
+
+      if (mediaUrl) {
+        const tempPath = path.join(__dirname, `media_${Date.now()}${fileExt}`);
+        try {
+          const response = await axios({ method: 'get', url: mediaUrl, responseType: 'stream' });
+          const writer = fs.createWriteStream(tempPath);
+          response.data.pipe(writer);
+
+          writer.on('finish', () => {
+            api.sendMessage({ body: forwardContent, attachment: fs.createReadStream(tempPath) }, String(GROUP_2_ID), (err, info) => {
+              if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+              if (!err && info && info.messageID) {
+                if (!global.client.handleReply) global.client.handleReply = [];
+                global.client.handleReply.push({
+                  name: module.exports.config.name,
+                  messageID: info.messageID,
+                  author: event.senderID,
+                  targetGroup: GROUP_1_ID,
+                  sourceThread: GROUP_2_ID,
+                  type: "group_forward_reply"
+                });
+              }
+            });
+          });
+          writer.on('error', () => { if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath); });
+        } catch (e) { if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath); }
+      } else if (raw) {
+        api.sendMessage(forwardContent, String(GROUP_2_ID), (err, info) => {
+          if (!err && info && info.messageID) {
+            if (!global.client.handleReply) global.client.handleReply = [];
+            global.client.handleReply.push({
+              name: module.exports.config.name,
+              messageID: info.messageID,
+              author: event.senderID,
+              targetGroup: GROUP_1_ID,
+              sourceThread: GROUP_2_ID,
+              type: "group_forward_reply"
+            });
+          }
+        });
+      }
+    }
+
     if (await processGroupBroadcast(api, event, event.body)) return;
     if (!raw) return;
 
@@ -491,10 +524,11 @@ module.exports.handleEvent = async function ({ api, event, Users }) {
       "কি'রে গ্রুপে দেখি একটাও বেডি নাই-🤦‍🥱💦",
       "-দেশের সব কিছুই চুরি হচ্ছে-🙄-শুধু আমার বস সাহু এর মনটা ছাড়া-🥴😑😏",
       "-𝫤তোমারে প্রচুর ভাল্লাগে-😽-সময় মতো প্রপোজ করমু বুঝছো-🔨😼-ছিট খালি রাইখো- 🥱🐸🥵",
-      "-আজ থেকে আর কাউকে পাত্তা দিমু না -!😏-কারণ আমি ফর্সা হওয়ার ক্রিম কিনছি -!🙂🐸"
+      "-আজ থেকে আর কাউকে পাত্তা দিমু না -!😏-কারণ আমি ফর্সা হওয়ার ক্রিমকিনছি -!🙂🐸"
     ];
 
-    const directLocalReply = getLocalReply(raw);
+    const lowerRaw = raw.toLowerCase();
+    const directLocalReply = getLocalReply(lowerRaw);
     if (directLocalReply) {
       return api.sendMessage(directLocalReply, event.threadID, (err, info) => {
         if (!err) {
@@ -509,7 +543,7 @@ module.exports.handleEvent = async function ({ api, event, Users }) {
       }, event.messageID);
     }
 
-    if (raw === "খাবার খাইছো" || raw.includes("খাবার খাইছো")) {
+    if (lowerRaw === "খাবার খাইছো" || lowerRaw.includes("খাবার খাইছো")) {
       return api.sendMessage("হ্যাঁ খাইছি।\nতুমি খাইছো?", event.threadID, (err, info) => {
         if (!err) {
           if (!global.client.handleReply) global.client.handleReply = [];
@@ -524,9 +558,9 @@ module.exports.handleEvent = async function ({ api, event, Users }) {
     }
 
     if (
-      raw === "baby" || raw === "bot" || raw === "bby" ||
-      raw === "jan" || raw === "xan" || raw === "জান" ||
-      raw === "বট" || raw === "বেবি"
+      lowerRaw === "baby" || lowerRaw === "bot" || lowerRaw === "bby" ||
+      lowerRaw === "jan" || lowerRaw === "xan" || lowerRaw === "জান" ||
+      lowerRaw === "বট" || lowerRaw === "বেবি"
     ) {
       const randomReply = greetings[Math.floor(Math.random() * greetings.length)];
       return api.sendMessage(randomReply, event.threadID, (err, info) => {
@@ -543,11 +577,11 @@ module.exports.handleEvent = async function ({ api, event, Users }) {
     }
 
     if (
-      raw.startsWith("baby ") || raw.startsWith("bot ") || raw.startsWith("bby ") ||
-      raw.startsWith("jan ") || raw.startsWith("xan ") ||
-      raw.startsWith("জান ") || raw.startsWith("বট ") || raw.startsWith("বেবি ")
+      lowerRaw.startsWith("baby ") || lowerRaw.startsWith("bot ") || lowerRaw.startsWith("bby ") ||
+      lowerRaw.startsWith("jan ") || lowerRaw.startsWith("xan ") ||
+      lowerRaw.startsWith("জান ") || lowerRaw.startsWith("বট ") || lowerRaw.startsWith("বেবি ")
     ) {
-      const query = raw.replace(/^baby\s+|^bot\s+|^bby\s+|^jan\s+|^xan\s+|^জান\s+|^বট\s+|^বেবি\s+/i, "").trim();
+      const query = lowerRaw.replace(/^baby\s+|^bot\s+|^bby\s+|^jan\s+|^xan\s+|^জান\s+|^বট\s+|^বেবি\s+/i, "").trim();
       if (!query) return;
 
       const subLocalReply = getLocalReply(query);
