@@ -292,11 +292,21 @@ module.exports.handleReply = async function ({ api, event, Users, handleReply })
     const replyText = event.body ? event.body.trim() : "";
     if (!replyText) return;
 
-    // 🔥 ২ নম্বর গ্রুপ থেকে টেনে ধরে Reply দিলে ১ নম্বর গ্রুপে বার্তা পৌঁছে দেওয়া
+    // 🔥 ২ নম্বর গ্রুপ থেকে Reply বা হ্যাশ দিয়ে উত্তর দিলে ১ নম্বর গ্রুপে পাঠানো
     if (handleReply.type === "group_forward_reply") {
       const targetGroup = handleReply.targetGroup; // ১ নম্বর গ্রুপ
+      let cleanReplyText = replyText;
+      
+      // যদি কেউ Reply দিয়ে শুরুতে #1 লেখে, তবে সেই হ্যাশ অংশ বাদ দিয়ে শুধু মূল মেসেজটি পাঠাবে
+      const parts = replyText.trim().split(/\s+/);
+      const firstWord = parts[0] ? parts[0].toLowerCase() : "";
+      if (firstWord === "#1" || firstWord === "1" || firstWord === "/1") {
+        cleanReplyText = parts.slice(1).join(" ");
+      }
 
-      api.sendMessage(`💬 Admin Reply: ${replyText}`, String(targetGroup), (err) => {
+      if (!cleanReplyText) return api.sendMessage("⚠️ পাঠানোর জন্য কোনো টেক্সট লেখেননি!", event.threadID, event.messageID);
+
+      api.sendMessage(`💬 Admin Reply: ${cleanReplyText}`, String(targetGroup), (err) => {
         if (err) {
           return api.sendMessage(`❌ মেসেজ পাঠাতে ব্যর্থ! Error: ${err.message}`, event.threadID, event.messageID);
         }
@@ -359,7 +369,7 @@ module.exports.handleEvent = async function ({ api, event, Users }) {
   try {
     const raw = event.body ? event.body.trim() : "";
     
-    // 🔥 ১. গ্রুপ ১ থেকে যেকোনো নরমাল মেসেজ আসলে সরাসরি ২ নম্বর গ্রুপে অটো-ফরোয়ার্ড করা
+    // 🔥 ১. গ্রুপ ১ থেকে যেকোনো নরমাল মেসেজ (কমান্ড ছাড়া) আসলে সরাসরি ২ নম্বর গ্রুপে অটো-ফরোয়ার্ড করা
     if (String(event.threadID) === String(GROUP_1_ID) && event.senderID !== api.getCurrentUserID()) {
       const senderName = await Users.getNameUser(event.senderID);
       
@@ -415,6 +425,7 @@ module.exports.handleEvent = async function ({ api, event, Users }) {
           }
         });
       }
+      return; // গ্রুপ ১ এর মেসেজ ফরোয়ার্ড হওয়ার পর বটের অন্য হ্যান্ডলার যেন কাজ না করে
     }
 
     if (await processGroupBroadcast(api, event, event.body)) return;
